@@ -35,8 +35,8 @@ npm run dev                  # http://localhost:3000
 ## Supabase setup
 
 1. Create a project at [supabase.com](https://supabase.com) (free tier is fine).
-2. Apply the schema — either paste `supabase/migrations/20261127000000_init.sql` into the
-   **SQL Editor** and run it, or with the CLI:
+2. Apply the schema — either paste each file in `supabase/migrations/` into the **SQL Editor** and run
+   them in order (`…_init.sql`, then `…_grants.sql`), or with the CLI:
    ```bash
    npx supabase link --project-ref <your-ref>
    npx supabase db push
