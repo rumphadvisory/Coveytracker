@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "@/components/Icon";
 import type { MapArea } from "@/components/MapView";
 import { useProperty } from "@/components/PropertyProvider";
@@ -28,6 +28,27 @@ type Mode = "upload" | "paste" | "draw";
 const PREVIEW_COLOR = "#e76624";
 const MIGRATION = "supabase/migrations/20261128000000_boundaries.sql";
 
+const draftKey = (propertyId: string) => `ct:boundary-draft:${propertyId}`;
+
+function loadDrafts(propertyId: string): Item[] {
+  try {
+    const raw = localStorage.getItem(draftKey(propertyId));
+    return raw ? (JSON.parse(raw) as Item[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDrafts(propertyId: string, items: Item[]) {
+  try {
+    if (items.length) localStorage.setItem(draftKey(propertyId), JSON.stringify(items));
+    else localStorage.removeItem(draftKey(propertyId));
+  } catch {}
+}
+
+const MIGRATION_SQL = `alter table public.properties add column if not exists boundary jsonb;
+alter table public.courses    add column if not exists boundary jsonb;`;
+
 function friendlySaveError(e: unknown): string {
   const m = errorMessage(e);
   return /boundary/i.test(m) && /column|schema/i.test(m)
@@ -47,6 +68,32 @@ export default function BoundariesPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Unsaved outlines belong to this property: keep them on the phone across property switches
+  // and reloads, and never let them carry over to another property.
+  const loadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    setItems(loadDrafts(property.id));
+    setDraft([]);
+    setDrawing(false);
+    setSaveResult(null);
+    setError(null);
+    setNotice(null);
+    loadedFor.current = property.id;
+  }, [property.id]);
+  useEffect(() => {
+    if (loadedFor.current === property.id) saveDrafts(property.id, items);
+  }, [items, property.id]);
+  useEffect(() => {
+    if (!items.length) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [items.length]);
+
+  // Has the one-time boundaries database update been run? (The column is missing otherwise.)
+  const dbReady = "boundary" in property;
 
   function startDrawing() {
     setDraft([]);
@@ -54,7 +101,6 @@ export default function BoundariesPage() {
     // The controls are below the map; bring the map itself into view for tapping.
     requestAnimationFrame(() => mapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
   }
-  const seq = useRef(0);
 
   /** Guess where an outline belongs: a course with the same name, else the property if it has none, else a new course. */
   function suggest(shape: BoundaryShape, isOnly: boolean): Assign {
@@ -70,7 +116,7 @@ export default function BoundariesPage() {
     setItems((cur) => [
       ...cur,
       ...shapes.map((shape) => ({
-        key: `i${++seq.current}`,
+        key: crypto.randomUUID(),
         shape,
         assign: suggest(shape, shapes.length === 1 && cur.length === 0),
         newName: shape.name,
@@ -103,7 +149,11 @@ export default function BoundariesPage() {
 
   function finishDrawing() {
     if (draft.length < 3) return;
-    addShapes([{ name: `Drawn area ${seq.current + 1}`, rings: [draft.map(([lat, lng]) => [lng, lat] as [number, number])] }]);
+    // Number drawn outlines 1, 2, 3… across what's waiting and what's already saved.
+    const used = [...items.map((i) => i.shape.name), ...courses.map((c) => c.name), ...(property.boundary ?? []).map((p) => p.name)];
+    let n = 1;
+    while (used.includes(`Drawn area ${n}`)) n++;
+    addShapes([{ name: `Drawn area ${n}`, rings: [draft.map(([lat, lng]) => [lng, lat] as [number, number])] }]);
     setDraft([]);
     setDrawing(false);
   }
@@ -114,6 +164,9 @@ export default function BoundariesPage() {
     setBusy(true);
     setError(null);
     setNotice(null);
+    setSaveResult(null);
+    const denied = () =>
+      new Error("The change wasn't saved: only the property's owner or a manager can change outlines.");
     try {
       const toProperty = items.filter((i) => i.assign === "property").map((i) => i.shape);
       if (toProperty.length) {
@@ -125,8 +178,9 @@ export default function BoundariesPage() {
           patch.lat = +c.lat.toFixed(6);
           patch.lng = +c.lng.toFixed(6);
         }
-        const { error } = await sb.from("properties").update(patch).eq("id", property.id);
+        const { data, error } = await sb.from("properties").update(patch).eq("id", property.id).select("id");
         if (error) throw error;
+        if (!data?.length) throw denied(); // access rules block silently: zero rows changed
       }
       // Existing courses: the outline(s) assigned replace the old one; acres follow the outline.
       const byCourse = new Map<string, BoundaryShape[]>();
@@ -136,11 +190,13 @@ export default function BoundariesPage() {
           byCourse.set(id, [...(byCourse.get(id) ?? []), i.shape]);
         }
       for (const [id, shapes] of byCourse) {
-        const { error } = await sb
+        const { data, error } = await sb
           .from("courses")
           .update({ boundary: shapes, acres: +totalAcres(shapes).toFixed(1) })
-          .eq("id", id);
+          .eq("id", id)
+          .select("id");
         if (error) throw error;
+        if (!data?.length) throw denied();
       }
       const fresh = items.filter((i) => i.assign === "new");
       if (fresh.length) {
@@ -157,9 +213,13 @@ export default function BoundariesPage() {
       const saved = items.filter((i) => i.assign !== "skip").length;
       setItems([]);
       await Promise.all([reloadRoster(), reloadMemberships()]);
-      setNotice(`Saved ${saved} outline${saved === 1 ? "" : "s"}.`);
+      const text = `Saved ${saved} outline${saved === 1 ? "" : "s"}. They're on the map now.`;
+      setNotice(text);
+      setSaveResult({ ok: true, text });
     } catch (e) {
-      setError(friendlySaveError(e));
+      const text = friendlySaveError(e);
+      setError(text);
+      setSaveResult({ ok: false, text });
     } finally {
       setBusy(false);
     }
@@ -204,6 +264,25 @@ export default function BoundariesPage() {
     <>
       <PageHeader title="Boundaries" icon="polyline" />
       <ErrorNote error={error} />
+      {!dbReady && canManage && (
+        <div className="mb-3 space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="flex items-center gap-2 font-semibold">
+            <Icon name="database" /> One-time database update needed
+          </div>
+          <p>
+            Outlines can&apos;t be saved until this runs. In Supabase, open <strong>SQL Editor → New query</strong>, paste
+            the two lines below, click <strong>Run</strong>, then reload this page.
+          </p>
+          <pre className="whitespace-pre-wrap break-words rounded-lg bg-white p-2 text-xs text-ink">{MIGRATION_SQL}</pre>
+          <button
+            type="button"
+            className="btn-secondary min-h-0 py-1.5 text-xs"
+            onClick={() => navigator.clipboard?.writeText(MIGRATION_SQL).catch(() => {})}
+          >
+            <Icon name="content_copy" className="text-[16px]" /> Copy SQL
+          </button>
+        </div>
+      )}
       {notice && (
         <div className="mb-3 flex items-center gap-2 rounded-xl bg-forest-light p-3 text-sm text-forest-dark">
           <Icon name="check_circle" /> {notice}
@@ -352,7 +431,12 @@ export default function BoundariesPage() {
               </li>
             ))}
           </ul>
-          <button type="button" className="btn-primary w-full" disabled={busy || items.every((i) => i.assign === "skip")} onClick={save}>
+          <button
+            type="button"
+            className="btn-primary w-full"
+            disabled={busy || !dbReady || items.every((i) => i.assign === "skip")}
+            onClick={save}
+          >
             <Icon name="save" /> {busy ? "Saving…" : "Save outlines"}
           </button>
         </section>
@@ -399,6 +483,43 @@ export default function BoundariesPage() {
           </ul>
         )}
       </section>
+      {/* Unsaved outlines: always visible, so a drawn outline can't be left unsaved by accident. */}
+      {canManage && (items.length > 0 || saveResult) && (
+        <>
+          <div className="h-24" aria-hidden />
+          <div
+            className="fixed inset-x-0 bottom-[60px] z-[1001] px-3 pb-2 md:bottom-0"
+            style={{ marginBottom: "env(safe-area-inset-bottom)" }}
+          >
+            <div className="mx-auto max-w-2xl space-y-2 rounded-2xl border border-line bg-white p-3 shadow-lg">
+              {saveResult && (
+                <p className={`flex items-start gap-1 text-sm ${saveResult.ok ? "text-forest-dark" : "text-red-700"}`}>
+                  <Icon name={saveResult.ok ? "check_circle" : "error"} className="text-[18px]" />
+                  <span className="flex-1">{saveResult.text}</span>
+                  <button type="button" className="text-bark" aria-label="Dismiss" onClick={() => setSaveResult(null)}>
+                    <Icon name="close" className="text-[18px]" />
+                  </button>
+                </p>
+              )}
+              {items.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 text-sm font-semibold text-amber-800">
+                    {items.length} outline{items.length === 1 ? "" : "s"} not saved yet
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={busy || !dbReady || items.every((i) => i.assign === "skip")}
+                    onClick={save}
+                  >
+                    <Icon name="save" /> {busy ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }
