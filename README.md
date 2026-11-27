@@ -9,7 +9,8 @@ Built with Next.js 14, Supabase, Leaflet + Esri satellite imagery, and Open-Mete
 
 | Module | What it does |
 | --- | --- |
-| **Field Mode** | Pick a course, start a hunt (weather auto-fetched), big one-handed **Mark Covey** / **Dog Contact** buttons. Each tap saves a GPS-stamped mark immediately. **End Hunt** opens the logger pre-filled. Survives reloads; keeps the screen awake. |
+| **Field Mode** | Pick a course, start a hunt (weather auto-fetched), big one-handed **Mark Covey** / **Dog Contact** buttons. Each tap saves a GPS-stamped mark on the phone and uploads it as soon as there's signal. **End Hunt** opens the logger pre-filled. Survives reloads; keeps the screen awake. |
+| **Offline & install** | Add to the home screen from the browser menu. Once opened with signal, Field Mode opens and marks coveys with no signal; a status strip shows marks waiting to upload. |
 | **Log Hunt** | 5-step wizard: Basics → Dogs → Coveys → Birds → Review, with auto-calculated totals. |
 | **Hunts** | Filter by season/course, expand for full detail and per-dog chips, delete (managers). |
 | **Dogs** | Ranked by contacts, bar chart, contacts/hr, hours, hunts. |
@@ -70,6 +71,9 @@ chosen role automatically. Just send them the site link.
 - **Weather**: Open-Meteo is free without a key for non-commercial use. Commercial use needs a paid plan
   — budget for it before charging customers. Pressure uses sea-level (`pressure_msl`) so it matches a
   barometer and the 30.1 inHg "high pressure" threshold.
+- **Offline scope**: Field Mode (marking) works offline. Saving the hunt form, the map tiles and the
+  dashboards need signal — the marks wait on the phone until then. The service worker only runs in
+  production builds (`npm run build && npm start`), not `npm run dev`.
 - **GPS** needs HTTPS (or localhost) — browsers block geolocation on plain HTTP.
 - **Tests**: `npm test` covers seasons, scenting model, harvest math and aggregations.
 

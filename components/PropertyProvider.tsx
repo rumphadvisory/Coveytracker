@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createClient, type Supabase } from "@/lib/supabase/client";
+import { isNetworkError } from "@/lib/markQueue";
 import type { CourseRow, DogRow, PropertyRow, Role } from "@/types/database";
 
 const STORAGE_KEY = "ct:propertyId";
@@ -39,6 +40,33 @@ export function useProperty(): Ctx {
   return ctx;
 }
 
+// Last-known data so Field Mode opens with no signal. Cleared on sign out.
+const CACHE_PREFIX = "ct:cache:";
+
+function readCache<T>(k: string): T | null {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + k);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(k: string, v: unknown) {
+  try {
+    localStorage.setItem(CACHE_PREFIX + k, JSON.stringify(v));
+  } catch {}
+}
+
+/** Sign-out: forget everything CoveyTracker keeps on this phone (cache, queue, field session). */
+export function clearLocalCache() {
+  try {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith("ct:"))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {}
+}
+
 function readStored(): string | null {
   try {
     return localStorage.getItem(STORAGE_KEY);
@@ -58,24 +86,57 @@ export default function PropertyProvider({ children }: { children: React.ReactNo
   const [error, setError] = useState<string | null>(null);
 
   const reloadMemberships = useCallback(async () => {
-    const { data: auth } = await sb.auth.getUser();
-    if (!auth.user) {
+    // getSession reads the local session (works with no signal); getUser verifies it with the server.
+    const {
+      data: { session },
+    } = await sb.auth.getSession();
+    if (!session) {
       router.replace("/");
       return;
     }
-    setUser(auth.user);
-    await sb.rpc("accept_pending_invites");
-    const { data, error } = await sb
-      .from("property_members")
-      .select("role, property:properties(*)")
-      .eq("user_id", auth.user.id)
-      .order("created_at");
-    if (error) {
-      setError(error.message);
+    // Render from the last-known memberships straight away; the network check below can take seconds.
+    const early = readCache<Membership[]>(`memberships:${session.user.id}`);
+    if (early?.length) {
+      setUser(session.user);
+      setMemberships(early);
+      const stored = readStored();
+      setPropertyId((cur) => {
+        const want = cur ?? stored;
+        return early.some((m) => m.property.id === want) ? want : early[0].property.id;
+      });
+    }
+    const { data: auth, error: authErr } = await sb.auth.getUser();
+    const offline = authErr != null && isNetworkError(authErr);
+    if (!auth.user && !offline) {
+      router.replace("/");
       return;
     }
-    const list = ((data ?? []) as unknown as { role: Role; property: PropertyRow | null }[])
-      .filter((m): m is Membership => m.property != null);
+    const me = auth.user ?? session.user;
+    setUser(me);
+
+    let list: Membership[] | null = null;
+    if (!offline) {
+      await sb.rpc("accept_pending_invites");
+      const { data, error } = await sb
+        .from("property_members")
+        .select("role, property:properties(*)")
+        .eq("user_id", me.id)
+        .order("created_at");
+      if (!error) {
+        list = ((data ?? []) as unknown as { role: Role; property: PropertyRow | null }[]).filter(
+          (m): m is Membership => m.property != null,
+        );
+        writeCache(`memberships:${me.id}`, list);
+      } else if (!isNetworkError(error)) {
+        setError(error.message);
+        return;
+      }
+    }
+    list ??= readCache<Membership[]>(`memberships:${me.id}`);
+    if (!list) {
+      setError("No signal, and this phone hasn't loaded your property yet. Open CoveyTracker once with signal.");
+      return;
+    }
     if (list.length === 0) {
       router.replace("/onboarding");
       return;
@@ -90,12 +151,28 @@ export default function PropertyProvider({ children }: { children: React.ReactNo
 
   const reloadRoster = useCallback(async () => {
     if (!propertyId) return;
+    // Show the last-known roster immediately (the network may be slow or absent), then refresh.
+    const cachedNow = readCache<{ dogs: DogRow[]; courses: CourseRow[] }>(`roster:${propertyId}`);
+    if (cachedNow) {
+      setDogs(cachedNow.dogs);
+      setCourses(cachedNow.courses);
+    }
     const [d, c] = await Promise.all([
       sb.from("dogs").select("*").eq("property_id", propertyId).order("name"),
       sb.from("courses").select("*").eq("property_id", propertyId).order("name"),
     ]);
+    if (d.error || c.error) {
+      // Offline: fall back to the last roster this phone saw.
+      const cached = readCache<{ dogs: DogRow[]; courses: CourseRow[] }>(`roster:${propertyId}`);
+      if (cached) {
+        setDogs(cached.dogs);
+        setCourses(cached.courses);
+      }
+      return;
+    }
     setDogs(d.data ?? []);
     setCourses(c.data ?? []);
+    writeCache(`roster:${propertyId}`, { dogs: d.data ?? [], courses: c.data ?? [] });
   }, [sb, propertyId]);
 
   useEffect(() => {

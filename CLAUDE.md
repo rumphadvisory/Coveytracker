@@ -35,6 +35,8 @@ components/
   Nav.tsx               # Top nav (desktop) + bottom bar & "More" sheet (mobile)
   HuntWizard.tsx        # 5-step hunt form
   MapView.tsx           # Leaflet wrapper (client-only; load with next/dynamic ssr:false)
+  QueueSync.tsx         # Background mark uploads + offline/pending status strip (useMarkQueue)
+  ServiceWorker.tsx     # Registers public/sw.js (production only) and pre-caches field pages
   DogChipGrid, WeatherCard, ScentingBadge, HarvestGauge, StatBox, ui.tsx (shared bits)
 lib/
   supabase/{client,server,middleware}.ts
@@ -45,6 +47,9 @@ lib/
   seasons.ts            # Season helpers (Aug–Jul)
   gps.ts                # Geolocation wrapper
   fieldSession.ts       # Active Field Mode session in localStorage
+  markQueue.ts          # Offline-first GPS mark queue (localStorage → gps_marks, idempotent)
+public/sw.js            # Service worker: network-first pages, cache-first static assets/fonts
+public/manifest.json    # PWA manifest (start_url /field) + icon-*.png
 types/database.ts       # DB types (hand-maintained; keep as `type`, not `interface`)
 supabase/migrations/    # SQL schema, triggers, RPCs, RLS
 tests/                  # node:test unit tests for lib/ logic
@@ -65,6 +70,11 @@ tests/                  # node:test unit tests for lib/ logic
   - hunts.total_contacts = sum(dog_runs.contacts)
 - Harvest adjustment: multiply bag by 1.3× for unrecovered birds (`lib/harvest.ts`).
 - Weather auto-fills on hunt start from Open-Meteo using the property's center.
+- Offline: Field Mode must work with no signal. Marks go through `enqueueMark()` (client UUID)
+  and are uploaded by QueueSync; never insert gps_marks directly from Field Mode. PropertyProvider
+  renders from `ct:cache:*` localStorage first, then refreshes. Sign out clears all `ct:*` keys.
+- The service worker never touches Supabase/Open-Meteo/tile requests. Bump `VERSION` in sw.js when
+  changing caching behaviour.
 - Popups/user text in Leaflet: build DOM with `textContent`, never innerHTML.
 - Roles: owner (everything + team + danger zone), manager (dogs/courses/settings, delete),
   handler (log hunts, marks, counts; may delete only their own unattached marks).

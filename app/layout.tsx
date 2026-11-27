@@ -8,7 +8,9 @@ const body = DM_Sans({ subsets: ["latin"], variable: "--font-body" });
 export const metadata: Metadata = {
   title: "CoveyTracker",
   description: "GPS covey mapping & hunting-dog performance analytics for quail plantations.",
-  icons: { icon: "/logo.png", apple: "/logo.png" },
+  manifest: "/manifest.json",
+  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "CoveyTracker", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

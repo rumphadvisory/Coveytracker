@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Icon from "@/components/Icon";
 import PropertyFields, { parseCoord, type PropertyValues } from "@/components/PropertyForm";
-import { useProperty } from "@/components/PropertyProvider";
+import { clearLocalCache, useProperty } from "@/components/PropertyProvider";
+import { loadQueue } from "@/lib/markQueue";
 import { ErrorNote, PageHeader } from "@/components/ui";
 import type { MemberListRow, PropertyInviteRow, Role } from "@/types/database";
 
@@ -313,7 +314,19 @@ export default function ManagePage() {
           <p className="text-sm">
             Signed in as <strong>{user.email}</strong> · <span className="pill">{role}</span>
           </p>
-          <form action="/auth/signout" method="post">
+          <form
+            action="/auth/signout"
+            method="post"
+            onSubmit={(e) => {
+              const pending = loadQueue(property.id).length;
+              if (pending && !confirm(`${pending} GPS mark(s) haven't uploaded yet and will be lost if you sign out. Sign out anyway?`)) {
+                e.preventDefault();
+                return;
+              }
+              clearLocalCache();
+              navigator.serviceWorker?.controller?.postMessage({ type: "clear" });
+            }}
+          >
             <button className="btn-secondary w-full">
               <Icon name="logout" /> Sign out
             </button>

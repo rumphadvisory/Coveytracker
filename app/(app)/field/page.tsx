@@ -9,6 +9,8 @@ import { Empty, ErrorNote } from "@/components/ui";
 import { errorMessage } from "@/lib/data";
 import { clearSession, loadSession, saveSession, type FieldSession, type SessionMark } from "@/lib/fieldSession";
 import { formatCoord, getPosition, watchPosition, type Fix } from "@/lib/gps";
+import { dequeueMark, enqueueMark } from "@/lib/markQueue";
+import { useMarkQueue } from "@/components/QueueSync";
 import { currentSeason } from "@/lib/seasons";
 import { fetchConditions, huntWeatherFields } from "@/lib/weather";
 
@@ -35,6 +37,8 @@ export default function FieldPage() {
   const [flash, setFlash] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const fixRef = useRef<Fix | null>(null);
+  const { queue, flush } = useMarkQueue();
+  const queuedIds = new Set(queue.map((q) => q.id));
 
   useEffect(() => {
     setSession(loadSession(property.id));
@@ -111,30 +115,36 @@ export default function FieldPage() {
     setError(null);
     try {
       const f = await currentFix();
-      const ts = new Date().toISOString();
-      const { data, error } = await sb
-        .from("gps_marks")
-        .insert({
-          property_id: property.id,
-          type,
-          lat: f.lat,
-          lng: f.lng,
-          accuracy: f.accuracy,
-          dog_id: dogId,
-          course_id: session.courseId,
-          season: session.season,
-          timestamp: ts,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      const m: SessionMark = { id: data.id, type, dogId, lat: f.lat, lng: f.lng, accuracy: f.accuracy, timestamp: ts };
+      const m: SessionMark = {
+        id: crypto.randomUUID(),
+        type,
+        dogId,
+        lat: f.lat,
+        lng: f.lng,
+        accuracy: f.accuracy,
+        timestamp: new Date().toISOString(),
+      };
+      // Saved on the phone first, uploaded by QueueSync — works with no signal.
+      enqueueMark({
+        id: m.id,
+        property_id: property.id,
+        type,
+        lat: m.lat,
+        lng: m.lng,
+        accuracy: m.accuracy,
+        dog_id: dogId,
+        course_id: session.courseId,
+        season: session.season,
+        timestamp: m.timestamp,
+        hunt_id: null,
+      });
       update({ ...session, marks: [...session.marks, m] });
+      flush();
       navigator.vibrate?.(60);
       setFlash(type === "covey" ? "Covey marked" : `Contact: ${dogName(dogId)}`);
       setTimeout(() => setFlash(null), 1600);
     } catch (e) {
-      setError(`Couldn't save mark: ${errorMessage(e)}`);
+      setError(`Couldn't get a GPS fix: ${errorMessage(e)}`);
     } finally {
       setBusy(null);
       setPicker(false);
@@ -143,8 +153,10 @@ export default function FieldPage() {
 
   async function removeMark(id: string) {
     if (!session) return;
-    const { error } = await sb.from("gps_marks").delete().eq("id", id);
-    if (error) return setError(errorMessage(error));
+    if (!dequeueMark(property.id, id)) {
+      const { error } = await sb.from("gps_marks").delete().eq("id", id);
+      if (error) return setError(errorMessage(error));
+    }
     update({ ...session, marks: session.marks.filter((m) => m.id !== id) });
   }
 
@@ -291,6 +303,11 @@ export default function FieldPage() {
                     {m.accuracy != null && ` ±${Math.round(m.accuracy)}m`}
                   </div>
                 </div>
+                <Icon
+                  name={queuedIds.has(m.id) ? "cloud_off" : "cloud_done"}
+                  className={`text-[18px] ${queuedIds.has(m.id) ? "text-amber-700" : "text-forest/60"}`}
+                />
+                <span className="sr-only">{queuedIds.has(m.id) ? "Waiting to upload" : "Uploaded"}</span>
                 <button className="p-1 text-bark" aria-label="Remove mark" onClick={() => removeMark(m.id)}>
                   <Icon name="delete" className="text-[20px]" />
                 </button>

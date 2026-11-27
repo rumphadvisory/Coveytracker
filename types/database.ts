@@ -4,6 +4,8 @@
 export type Role = "owner" | "manager" | "handler";
 export type MarkType = "covey" | "contact";
 
+// Generated = `generated always` columns, which can't be written. Columns with defaults
+// (id, created_at, …) stay optional on Insert.
 type Table<Row, Required extends keyof Row, Generated extends keyof Row = never> = {
   Row: Row;
   Insert: Pick<Row, Required> & Partial<Omit<Row, Required | Generated>>;
@@ -134,19 +136,19 @@ export type MemberListRow = {
 export type Database = {
   public: {
     Tables: {
-      properties: Table<PropertyRow, "name", "id" | "created_at">;
-      property_members: Table<PropertyMemberRow, "property_id" | "user_id" | "role", "id" | "created_at">;
-      property_invites: Table<PropertyInviteRow, "property_id" | "email" | "role", "id" | "created_at">;
-      dogs: Table<DogRow, "property_id" | "name", "id" | "created_at">;
-      courses: Table<CourseRow, "property_id" | "name", "id" | "created_at">;
+      properties: Table<PropertyRow, "name">;
+      property_members: Table<PropertyMemberRow, "property_id" | "user_id" | "role">;
+      property_invites: Table<PropertyInviteRow, "property_id" | "email" | "role">;
+      dogs: Table<DogRow, "property_id" | "name">;
+      courses: Table<CourseRow, "property_id" | "name">;
       hunts: Table<
         HuntRow,
         "property_id" | "season",
-        "id" | "created_at" | "total_coveys_seen" | "total_birds_adult" | "total_contacts"
+        "total_coveys_seen" | "total_birds_adult" | "total_contacts"
       >;
-      dog_runs: Table<DogRunRow, "hunt_id" | "dog_id", "id">;
-      gps_marks: Table<GpsMarkRow, "property_id" | "type" | "lat" | "lng" | "season", "id">;
-      covey_counts: Table<CoveyCountRow, "property_id" | "season", "id" | "created_at" | "estimated_birds">;
+      dog_runs: Table<DogRunRow, "hunt_id" | "dog_id">;
+      gps_marks: Table<GpsMarkRow, "property_id" | "type" | "lat" | "lng" | "season">;
+      covey_counts: Table<CoveyCountRow, "property_id" | "season", "estimated_birds">;
     };
     Views: { [_ in never]: never };
     Functions: {

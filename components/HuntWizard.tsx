@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { errorMessage } from "@/lib/data";
+import { assignQueuedToHunt } from "@/lib/markQueue";
 import { clearSession, contactsByDog, sessionHours, type FieldSession } from "@/lib/fieldSession";
 import { localDateISO, seasonForDate, todayISO } from "@/lib/seasons";
 import { fetchConditions, huntWeatherFields } from "@/lib/weather";
@@ -155,14 +156,14 @@ export default function HuntWizard({ session }: { session?: FieldSession | null 
       }
 
       if (session?.marks.length) {
-        const { error: mErr } = await sb
-          .from("gps_marks")
-          .update({ hunt_id: hunt.id })
-          .in(
-            "id",
-            session.marks.map((m) => m.id),
-          );
-        if (mErr) throw mErr;
+        const ids = session.marks.map((m) => m.id);
+        // Marks still on the phone get hunt_id when they upload; uploaded ones are updated now.
+        const queued = assignQueuedToHunt(property.id, ids, hunt.id);
+        const uploaded = ids.filter((id) => !queued.has(id));
+        if (uploaded.length) {
+          const { error: mErr } = await sb.from("gps_marks").update({ hunt_id: hunt.id }).in("id", uploaded);
+          if (mErr) throw mErr;
+        }
       }
       if (session) clearSession(property.id);
       router.push("/hunts");
