@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Icon from "@/components/Icon";
-import PropertyFields, { parseCoord, type PropertyValues } from "@/components/PropertyForm";
+import PropertyFields, { coordsError, parseCoord, type PropertyValues } from "@/components/PropertyForm";
 import { clearLocalCache, useProperty } from "@/components/PropertyProvider";
 import { cacheClear } from "@/lib/cache";
 import { totalQueued } from "@/lib/outbox";
@@ -39,6 +39,8 @@ export default function ManagePage() {
   async function saveProperty(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const bad = coordsError(values);
+    if (bad) return setError(bad);
     const { error } = await sb
       .from("properties")
       .update({ name: values.name.trim(), lat: parseCoord(values.lat, 90), lng: parseCoord(values.lng, 180) })
