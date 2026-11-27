@@ -5,6 +5,8 @@ performance, monitor harvest pressure against sustainable budgets, and auto-fill
 
 Built with Next.js 14, Supabase, Leaflet + Esri satellite imagery, and Open-Meteo.
 
+**Live:** https://coveytracker.vercel.app (production deploys from `main`)
+
 ## Features
 
 | Module | What it does |
