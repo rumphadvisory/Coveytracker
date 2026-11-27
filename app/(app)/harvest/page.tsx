@@ -6,39 +6,28 @@ import Icon from "@/components/Icon";
 import { useProperty } from "@/components/PropertyProvider";
 import StatBox from "@/components/StatBox";
 import { useHunts } from "@/components/useHunts";
-import { Empty, ErrorNote, Loading, NumberField, PageHeader, SeasonSelect } from "@/components/ui";
-import { errorMessage, fetchCounts } from "@/lib/data";
+import { Empty, ErrorNote, Loading, NumberField, OfflineNote, PageHeader, SeasonSelect } from "@/components/ui";
+import { useCounts } from "@/components/useCounts";
 import { DEFAULT_COVEY_SIZE, DEFAULT_HARVEST_RATE, harvestLine, UNRECOVERED_MULTIPLIER } from "@/lib/harvest";
 import { currentSeason } from "@/lib/seasons";
 import { countSummary, totals } from "@/lib/stats";
-import type { CoveyCountRow } from "@/types/database";
 
 export default function HarvestPage() {
-  const { sb, property, courses } = useProperty();
+  const { property, courses } = useProperty();
   const [season, setSeason] = useState(currentSeason());
   const [rate, setRate] = useState(DEFAULT_HARVEST_RATE);
   const [avgSize, setAvgSize] = useState(DEFAULT_COVEY_SIZE);
-  const [counts, setCounts] = useState<CoveyCountRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { counts, error, offline } = useCounts(season);
   const { hunts, error: huntError } = useHunts(season);
 
+  // Start from the survey's own average covey size whenever the season's counts change.
+  const countsKey = counts ? `${season}:${counts.length}` : null;
   useEffect(() => {
-    let live = true;
-    setCounts(null);
-    fetchCounts(sb, property.id, season)
-      .then((c) => {
-        if (!live) return;
-        setCounts(c);
-        // Start from the survey's own average covey size.
-        const heard = c.reduce((a, x) => a + x.coveys_heard, 0);
-        if (heard > 0) setAvgSize(Math.round(c.reduce((a, x) => a + x.estimated_birds, 0) / heard));
-        else setAvgSize(DEFAULT_COVEY_SIZE);
-      })
-      .catch((e) => live && setError(errorMessage(e)));
-    return () => {
-      live = false;
-    };
-  }, [sb, property.id, season]);
+    if (!counts) return;
+    const heard = counts.reduce((a, x) => a + x.coveys_heard, 0);
+    setAvgSize(heard > 0 ? Math.round(counts.reduce((a, x) => a + x.estimated_birds, 0) / heard) : DEFAULT_COVEY_SIZE);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countsKey]);
 
   const rows = useMemo(() => {
     if (!counts || !hunts) return [];
@@ -64,6 +53,7 @@ export default function HarvestPage() {
         <SeasonSelect value={season} onChange={setSeason} />
       </PageHeader>
       <ErrorNote error={error ?? huntError} />
+      <OfflineNote show={offline} />
 
       <section className="card mb-4 grid gap-4 sm:grid-cols-2">
         <div>

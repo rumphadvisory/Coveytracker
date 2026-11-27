@@ -5,7 +5,8 @@ import Link from "next/link";
 import Icon from "@/components/Icon";
 import PropertyFields, { parseCoord, type PropertyValues } from "@/components/PropertyForm";
 import { clearLocalCache, useProperty } from "@/components/PropertyProvider";
-import { loadQueue } from "@/lib/markQueue";
+import { cacheClear } from "@/lib/cache";
+import { totalQueued } from "@/lib/outbox";
 import { ErrorNote, PageHeader } from "@/components/ui";
 import type { MemberListRow, PropertyInviteRow, Role } from "@/types/database";
 
@@ -317,14 +318,20 @@ export default function ManagePage() {
           <form
             action="/auth/signout"
             method="post"
-            onSubmit={(e) => {
-              const pending = loadQueue(property.id).length;
-              if (pending && !confirm(`${pending} GPS mark(s) haven't uploaded yet and will be lost if you sign out. Sign out anyway?`)) {
-                e.preventDefault();
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const form = e.currentTarget;
+              const pending = totalQueued();
+              if (
+                pending &&
+                !confirm(`${pending} item(s) saved on this phone haven't uploaded yet and will be lost if you sign out. Sign out anyway?`)
+              )
                 return;
-              }
+              // Forget everything kept on this phone for this account before leaving.
               clearLocalCache();
+              await cacheClear();
               navigator.serviceWorker?.controller?.postMessage({ type: "clear" });
+              form.submit();
             }}
           >
             <button className="btn-secondary w-full">

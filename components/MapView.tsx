@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { DEFAULT_CENTER, type Fix } from "@/lib/gps";
+import { OFFLINE_MAX_ZOOM, OFFLINE_STYLES } from "@/lib/tiles";
 import type { GpsMarkRow } from "@/types/database";
 
 export const MARK_COLORS = { covey: "#e76624", contact: "#257de0", me: "#3d6e38", count: "#7a5c2e" } as const;
@@ -33,6 +34,17 @@ const BASEMAPS = {
   },
 } as const;
 type BasemapId = keyof typeof BASEMAPS;
+
+const USGS = "USGS The National Map";
+type BasemapDef = { attribution: string; layers: readonly { url: string; maxNativeZoom: number }[] };
+/** What each choice shows with no signal: the public-domain USGS maps that can be saved offline. */
+const OFFLINE_FALLBACK: Record<BasemapId, BasemapDef> = {
+  satellite: { attribution: USGS, layers: [{ url: OFFLINE_STYLES.aerial.url, maxNativeZoom: OFFLINE_MAX_ZOOM }] },
+  hybrid: { attribution: USGS, layers: [{ url: OFFLINE_STYLES.aerial.url, maxNativeZoom: OFFLINE_MAX_ZOOM }] },
+  topo: { attribution: USGS, layers: [{ url: OFFLINE_STYLES.topo.url, maxNativeZoom: OFFLINE_MAX_ZOOM }] },
+};
+
+const isOffline = () => typeof navigator !== "undefined" && navigator.onLine === false;
 const BASEMAP_KEY = "ct:mapLayer";
 
 function readBasemap(): BasemapId {
@@ -87,6 +99,26 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
   const readyRef = useRef(false);
   const baseLayer = useRef<L.LayerGroup | null>(null);
   const [basemap, setBasemap] = useState<BasemapId>("satellite");
+  const [offline, setOffline] = useState(false);
+  const basemapRef = useRef<BasemapId>("satellite");
+  basemapRef.current = basemap;
+
+  // Swap to saved USGS maps when signal drops, and back when it returns.
+  useEffect(() => {
+    const update = () => {
+      const off = isOffline();
+      setOffline(off);
+      showBasemap(basemapRef.current, off);
+    };
+    setOffline(isOffline());
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const latest = useRef({ marks, fix, extraPoints, courseName, dogName, fitKey });
   latest.current = { marks, fix, extraPoints, courseName, dogName, fitKey };
 
@@ -186,20 +218,21 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function showBasemap(id: BasemapId) {
+  function showBasemap(id: BasemapId, offline = isOffline()) {
     const Lf = leafletRef.current;
     const map = mapRef.current;
     if (!Lf || !map) return;
     baseLayer.current?.remove();
-    const def = BASEMAPS[id];
+    // With no signal, use the USGS maps that can be saved on the phone (see OfflineMaps).
+    const def = offline ? OFFLINE_FALLBACK[id] : BASEMAPS[id];
+    // Layers are added bottom to top (imagery, then roads, then labels). Marks live in
+    // Leaflet's overlay pane, which always draws above tiles.
     const group = Lf.layerGroup(
       def.layers.map((l, i) =>
         Lf.tileLayer(l.url, { maxZoom: 19, maxNativeZoom: l.maxNativeZoom, attribution: i === 0 ? def.attribution : undefined }),
       ),
     );
     group.addTo(map);
-    // Keep basemap tiles under the marks.
-    group.eachLayer((t) => (t as L.TileLayer).bringToBack());
     baseLayer.current = group;
   }
 
@@ -224,6 +257,11 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
         aria-label="Map type"
         className="absolute right-3 top-3 z-[500] flex overflow-hidden rounded-xl bg-white/95 text-xs font-semibold shadow"
       >
+        {offline && (
+          <span className="flex items-center gap-1 bg-ink px-2.5 text-white" title="No signal: showing maps saved on this phone">
+            <span className="material-symbols-outlined text-[14px]">cloud_off</span> Offline
+          </span>
+        )}
         {(Object.keys(BASEMAPS) as BasemapId[]).map((id) => (
           <button
             key={id}

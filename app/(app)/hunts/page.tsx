@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import Icon from "@/components/Icon";
 import { useProperty } from "@/components/PropertyProvider";
-import { CourseSelect, Empty, ErrorNote, Loading, PageHeader, SeasonSelect } from "@/components/ui";
-import { ALL, errorMessage, fetchHunts } from "@/lib/data";
+import { CourseSelect, Empty, ErrorNote, Loading, OfflineNote, PageHeader, SeasonSelect } from "@/components/ui";
+import { useHunts } from "@/components/useHunts";
+import { ALL, type Pending } from "@/lib/data";
+import { removeQueuedHunt } from "@/lib/outbox";
 import { currentSeason, formatDate } from "@/lib/seasons";
 import type { HuntWithRuns } from "@/types/database";
 
@@ -13,29 +15,20 @@ export default function HuntsPage() {
   const { sb, property, courseName, dogName, canManage } = useProperty();
   const [season, setSeason] = useState(currentSeason());
   const [course, setCourse] = useState(ALL);
-  const [hunts, setHunts] = useState<HuntWithRuns[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { hunts, error: loadError, offline, reload } = useHunts(season);
 
-  const load = useCallback(async () => {
-    setHunts(null);
-    try {
-      setHunts(await fetchHunts(sb, property.id, season));
-    } catch (e) {
-      setError(errorMessage(e));
-      setHunts([]);
-    }
-  }, [sb, property.id, season]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  async function remove(h: HuntWithRuns) {
+  async function remove(h: Pending<HuntWithRuns>) {
     if (!confirm(`Delete the ${formatDate(h.date)} hunt on ${courseName(h.course_id)}? This can't be undone.`)) return;
+    // Not uploaded yet: just drop it (and its dog runs) from this phone.
+    if (h._pending) {
+      removeQueuedHunt(property.id, h.id);
+      return;
+    }
     const { error } = await sb.from("hunts").delete().eq("id", h.id);
     if (error) return setError(error.message);
-    setHunts((list) => list?.filter((x) => x.id !== h.id) ?? null);
+    reload();
   }
 
   const shown = (hunts ?? []).filter((h) => course === ALL || h.course_id === course);
@@ -46,7 +39,8 @@ export default function HuntsPage() {
         <SeasonSelect value={season} onChange={setSeason} allowAll />
         <CourseSelect value={course} onChange={setCourse} allowAll className="w-auto py-2 text-sm" />
       </PageHeader>
-      <ErrorNote error={error} />
+      <ErrorNote error={error ?? loadError} />
+      <OfflineNote show={offline} />
 
       {hunts === null ? (
         <Loading />
@@ -73,6 +67,11 @@ export default function HuntsPage() {
                       {formatDate(h.date)} · {courseName(h.course_id)}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-1.5 text-xs">
+                      {h._pending && (
+                        <span className="pill bg-amber-100 text-amber-900">
+                          <Icon name="cloud_off" className="text-[14px]" /> Waiting to upload
+                        </span>
+                      )}
                       <span className="pill">{h.total_coveys_seen} coveys</span>
                       <span className="pill">{h.total_contacts} contacts</span>
                       <span className="pill">{h.total_birds_adult + h.total_birds_juvenile} birds</span>
@@ -143,7 +142,7 @@ export default function HuntsPage() {
                       </table>
                     )}
                     {h.comments && <p className="mt-3 whitespace-pre-wrap text-sm text-bark">{h.comments}</p>}
-                    {canManage && (
+                    {(canManage || h._pending) && (
                       <div className="mt-4 flex justify-end">
                         <button className="btn-ghost text-red-700" onClick={() => remove(h)}>
                           <Icon name="delete" /> Delete hunt

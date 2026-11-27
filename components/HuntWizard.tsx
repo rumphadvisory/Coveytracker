@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { errorMessage } from "@/lib/data";
-import { assignQueuedToHunt } from "@/lib/markQueue";
+import { enqueue, insertOp, updateOp, type Op } from "@/lib/outbox";
 import { clearSession, contactsByDog, sessionHours, type FieldSession } from "@/lib/fieldSession";
 import { localDateISO, seasonForDate, todayISO } from "@/lib/seasons";
 import { fetchConditions, huntWeatherFields } from "@/lib/weather";
@@ -77,7 +77,7 @@ function formFromSession(s: FieldSession): HuntForm {
 }
 
 export default function HuntWizard({ session }: { session?: FieldSession | null }) {
-  const { sb, property, activeDogs, dogName, courseName, courses } = useProperty();
+  const { property, activeDogs, dogName, courseName, courses } = useProperty();
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<HuntForm>(() => (session ? formFromSession(session) : blankForm()));
@@ -131,40 +131,36 @@ export default function HuntWizard({ session }: { session?: FieldSession | null 
     return true;
   }, [step, form.date, form.course_id]);
 
-  async function save() {
+  function save() {
     setSaving(true);
     setError(null);
     try {
+      // Saved on the phone first and uploaded in order by QueueSync, so this works with no signal:
+      // the hunt, then its dog runs, then the field session's marks are pointed at it.
       const { dogs, ...rest } = form;
-      const { data: hunt, error: hErr } = await sb
-        .from("hunts")
-        .insert({
+      const huntId = crypto.randomUUID();
+      const ops: Op[] = [
+        insertOp(property.id, "hunts", {
           ...rest,
+          id: huntId,
           property_id: property.id,
           season,
           course_id: form.course_id || null,
-        })
-        .select("id")
-        .single();
-      if (hErr) throw hErr;
-
-      if (dogs.length) {
-        const { error: dErr } = await sb
-          .from("dog_runs")
-          .insert(dogs.map((d) => ({ hunt_id: hunt.id, dog_id: d.dog_id, contacts: d.contacts, hours: d.hours })));
-        if (dErr) throw dErr;
-      }
-
+        }),
+        ...dogs.map((d) =>
+          insertOp(property.id, "dog_runs", {
+            id: crypto.randomUUID(),
+            hunt_id: huntId,
+            dog_id: d.dog_id,
+            contacts: d.contacts,
+            hours: d.hours,
+          }),
+        ),
+      ];
       if (session?.marks.length) {
-        const ids = session.marks.map((m) => m.id);
-        // Marks still on the phone get hunt_id when they upload; uploaded ones are updated now.
-        const queued = assignQueuedToHunt(property.id, ids, hunt.id);
-        const uploaded = ids.filter((id) => !queued.has(id));
-        if (uploaded.length) {
-          const { error: mErr } = await sb.from("gps_marks").update({ hunt_id: hunt.id }).in("id", uploaded);
-          if (mErr) throw mErr;
-        }
+        ops.push(updateOp(property.id, "gps_marks", session.marks.map((m) => m.id), { hunt_id: huntId }));
       }
+      enqueue(property.id, ...ops);
       if (session) clearSession(property.id);
       router.push("/hunts");
     } catch (e) {

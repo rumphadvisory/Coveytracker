@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 
-const WARM = ["/field", "/log", "/map", "/hunts", "/counts"];
+// Every app page, so any screen opens with no signal (scripts are cached alongside).
+const WARM = ["/field", "/log", "/map", "/hunts", "/counts", "/dogs", "/courses", "/weather", "/harvest", "/season", "/manage"];
 
 /** Registers the service worker (production only) and pre-caches the field pages. */
 export default function ServiceWorker() {

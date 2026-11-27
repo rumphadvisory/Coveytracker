@@ -9,8 +9,8 @@ import { Empty, ErrorNote } from "@/components/ui";
 import { errorMessage } from "@/lib/data";
 import { clearSession, loadSession, saveSession, type FieldSession, type SessionMark } from "@/lib/fieldSession";
 import { formatCoord, getPosition, watchPosition, type Fix } from "@/lib/gps";
-import { dequeueMark, enqueueMark } from "@/lib/markQueue";
-import { useMarkQueue } from "@/components/QueueSync";
+import { enqueue, insertOp, removeQueuedRow } from "@/lib/outbox";
+import { useOutbox } from "@/components/QueueSync";
 import { currentSeason } from "@/lib/seasons";
 import { fetchConditions, huntWeatherFields } from "@/lib/weather";
 
@@ -37,8 +37,8 @@ export default function FieldPage() {
   const [flash, setFlash] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const fixRef = useRef<Fix | null>(null);
-  const { queue, flush } = useMarkQueue();
-  const queuedIds = new Set(queue.map((q) => q.id));
+  const { ops, flush } = useOutbox();
+  const queuedIds = new Set(ops.filter((o) => o.kind === "insert" && o.table === "gps_marks").map((o) => o.id));
 
   useEffect(() => {
     setSession(loadSession(property.id));
@@ -125,7 +125,9 @@ export default function FieldPage() {
         timestamp: new Date().toISOString(),
       };
       // Saved on the phone first, uploaded by QueueSync — works with no signal.
-      enqueueMark({
+      enqueue(
+        property.id,
+        insertOp(property.id, "gps_marks", {
         id: m.id,
         property_id: property.id,
         type,
@@ -137,7 +139,8 @@ export default function FieldPage() {
         season: session.season,
         timestamp: m.timestamp,
         hunt_id: null,
-      });
+        }),
+      );
       update({ ...session, marks: [...session.marks, m] });
       flush();
       navigator.vibrate?.(60);
@@ -153,7 +156,7 @@ export default function FieldPage() {
 
   async function removeMark(id: string) {
     if (!session) return;
-    if (!dequeueMark(property.id, id)) {
+    if (!removeQueuedRow(property.id, id)) {
       const { error } = await sb.from("gps_marks").delete().eq("id", id);
       if (error) return setError(errorMessage(error));
     }

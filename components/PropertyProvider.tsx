@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createClient, type Supabase } from "@/lib/supabase/client";
-import { isNetworkError } from "@/lib/markQueue";
+import { isNetworkError } from "@/lib/outbox";
 import type { CourseRow, DogRow, PropertyRow, Role } from "@/types/database";
 
 const STORAGE_KEY = "ct:propertyId";
