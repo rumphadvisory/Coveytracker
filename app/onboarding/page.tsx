@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
-import PropertyFields, { parseCoord, type PropertyValues } from "@/components/PropertyForm";
+import PropertyFields, { coordsError, parseCoord, type PropertyValues } from "@/components/PropertyForm";
 import { createClient } from "@/lib/supabase/client";
 import { errorMessage } from "@/lib/data";
 
@@ -83,6 +83,8 @@ export default function Onboarding() {
 
   async function createProperty(e: React.FormEvent) {
     e.preventDefault();
+    const bad = coordsError(values);
+    if (bad) return setError(bad);
     setBusy(true);
     setError(null);
     const { data: auth } = await sb.auth.getUser();
