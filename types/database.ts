@@ -1,0 +1,166 @@
+// Hand-maintained to match supabase/migrations. Regenerate with `npm run db:types`
+// once a Supabase project exists (then keep the convenience aliases at the bottom).
+
+export type Role = "owner" | "manager" | "handler";
+export type MarkType = "covey" | "contact";
+
+// Generated = `generated always` columns, which can't be written. Columns with defaults
+// (id, created_at, …) stay optional on Insert.
+type Table<Row, Required extends keyof Row, Generated extends keyof Row = never> = {
+  Row: Row;
+  Insert: Pick<Row, Required> & Partial<Omit<Row, Required | Generated>>;
+  Update: Partial<Omit<Row, Generated>>;
+  Relationships: [];
+};
+
+export type PropertyRow = {
+  id: string;
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  owner_id: string;
+  created_at: string;
+}
+
+export type PropertyMemberRow = {
+  id: string;
+  property_id: string;
+  user_id: string;
+  role: Role;
+  created_at: string;
+}
+
+export type PropertyInviteRow = {
+  id: string;
+  property_id: string;
+  email: string;
+  role: Exclude<Role, "owner">;
+  invited_by: string | null;
+  created_at: string;
+}
+
+export type DogRow = {
+  id: string;
+  property_id: string;
+  name: string;
+  active: boolean;
+  created_at: string;
+}
+
+export type CourseRow = {
+  id: string;
+  property_id: string;
+  name: string;
+  acres: number | null;
+  created_at: string;
+}
+
+export type HuntRow = {
+  id: string;
+  property_id: string;
+  date: string;
+  season: string;
+  course_id: string | null;
+  hours_spent: number | null;
+  weather: string | null;
+  temperature: string | null;
+  wind: string | null;
+  ground: string | null;
+  barometric_pressure: string | null;
+  comments: string | null;
+  coveys_pointed: number;
+  coveys_shot: number;
+  coveys_flushed: number;
+  coveys_flushed_wild: number;
+  total_coveys_seen: number;
+  birds_on_covey_rise: number;
+  singles_shot: number;
+  total_birds_cocks: number;
+  total_birds_hens: number;
+  total_birds_adult: number;
+  total_birds_juvenile: number;
+  total_contacts: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type DogRunRow = {
+  id: string;
+  hunt_id: string;
+  dog_id: string;
+  contacts: number;
+  hours: number | null;
+}
+
+export type GpsMarkRow = {
+  id: string;
+  property_id: string;
+  hunt_id: string | null;
+  type: MarkType;
+  lat: number;
+  lng: number;
+  accuracy: number | null;
+  dog_id: string | null;
+  course_id: string | null;
+  season: string;
+  timestamp: string;
+  notes: string | null;
+  created_by: string | null;
+}
+
+export type CoveyCountRow = {
+  id: string;
+  property_id: string;
+  date: string;
+  season: string;
+  course_id: string | null;
+  coveys_heard: number;
+  avg_covey_size: number;
+  acres_surveyed: number | null;
+  estimated_birds: number;
+  lat: number | null;
+  lng: number | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type MemberListRow = {
+  id: string;
+  user_id: string;
+  email: string;
+  role: Role;
+  created_at: string;
+}
+
+export type Database = {
+  public: {
+    Tables: {
+      properties: Table<PropertyRow, "name">;
+      property_members: Table<PropertyMemberRow, "property_id" | "user_id" | "role">;
+      property_invites: Table<PropertyInviteRow, "property_id" | "email" | "role">;
+      dogs: Table<DogRow, "property_id" | "name">;
+      courses: Table<CourseRow, "property_id" | "name">;
+      hunts: Table<
+        HuntRow,
+        "property_id" | "season",
+        "total_coveys_seen" | "total_birds_adult" | "total_contacts"
+      >;
+      dog_runs: Table<DogRunRow, "hunt_id" | "dog_id">;
+      gps_marks: Table<GpsMarkRow, "property_id" | "type" | "lat" | "lng" | "season">;
+      covey_counts: Table<CoveyCountRow, "property_id" | "season", "estimated_birds">;
+    };
+    Views: { [_ in never]: never };
+    Functions: {
+      accept_pending_invites: { Args: Record<PropertyKey, never>; Returns: number };
+      property_member_list: { Args: { p_property: string }; Returns: MemberListRow[] };
+      clear_hunt_data: { Args: { p_property: string }; Returns: undefined };
+      member_role: { Args: { p_property: string }; Returns: string | null };
+    };
+    Enums: { [_ in never]: never };
+    CompositeTypes: { [_ in never]: never };
+  };
+}
+
+/** A hunt with its dog runs joined (as selected by lib/data.ts). */
+export type HuntWithRuns = HuntRow & { dog_runs: DogRunRow[] };

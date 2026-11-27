@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  @apply bg-sand text-ink antialiased;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  line-height: 1;
+  vertical-align: middle;
+  user-select: none;
+}
+.icon-fill {
+  font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-line bg-white p-4 shadow-sm;
+  }
+  .h-page {
+    @apply font-display text-2xl text-ink;
+  }
+  .h-section {
+    @apply font-display text-lg text-ink;
+  }
+  .label {
+    @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-bark;
+  }
+  .input {
+    @apply w-full rounded-xl border border-line bg-white px-3 py-2.5 text-base text-ink outline-none transition focus:border-forest focus:ring-2 focus:ring-forest/20 disabled:bg-sand;
+  }
+  .btn {
+    @apply inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-forest text-white hover:bg-forest-dark;
+  }
+  .btn-secondary {
+    @apply btn border border-line bg-white text-ink hover:bg-sand;
+  }
+  .btn-ghost {
+    @apply btn text-bark hover:bg-sand-dark;
+  }
+  .btn-danger {
+    @apply btn bg-red-700 text-white hover:bg-red-800;
+  }
+  .chip {
+    @apply inline-flex min-h-[40px] items-center gap-1 rounded-full border border-line bg-white px-3.5 py-1.5 text-sm font-medium text-ink transition active:scale-[0.97];
+  }
+  .chip-on {
+    @apply border-forest bg-forest text-white;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1 rounded-full bg-sand-dark px-2.5 py-1 text-xs font-medium text-bark;
+  }
+  .table-cell {
+    @apply px-2 py-2 text-right tabular-nums;
+  }
+}
+
+/* Leaflet popup typography */
+.leaflet-container {
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+.ct-popup strong {
+  display: block;
+  margin-bottom: 2px;
+}
