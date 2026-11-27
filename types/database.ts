@@ -2,6 +2,11 @@
 // once a Supabase project exists (then keep the convenience aliases at the bottom).
 
 export type Role = "owner" | "manager" | "handler";
+
+/** [longitude, latitude] — GeoJSON order. */
+export type LngLat = [number, number];
+/** A named area: first ring is the outline, any further rings are holes. */
+export type BoundaryShape = { name: string; rings: LngLat[][] };
 export type MarkType = "covey" | "contact";
 
 // Generated = `generated always` columns, which can't be written. Columns with defaults
@@ -18,6 +23,8 @@ export type PropertyRow = {
   name: string;
   lat: number | null;
   lng: number | null;
+  /** Parcels making up the property (null until outlined). */
+  boundary: BoundaryShape[] | null;
   owner_id: string;
   created_at: string;
 }
@@ -52,6 +59,8 @@ export type CourseRow = {
   property_id: string;
   name: string;
   acres: number | null;
+  /** Course outline (usually one area; null until outlined). */
+  boundary: BoundaryShape[] | null;
   created_at: string;
 }
 

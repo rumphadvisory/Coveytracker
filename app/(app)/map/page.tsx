@@ -7,6 +7,7 @@ import OfflineMaps from "@/components/OfflineMaps";
 import { useProperty } from "@/components/PropertyProvider";
 import { CourseSelect, ErrorNote, OfflineNote, PageHeader, SeasonSelect } from "@/components/ui";
 import { useMarks } from "@/components/useCounts";
+import { propertyAreas } from "@/lib/areas";
 import { ALL } from "@/lib/data";
 import { watchPosition, type Fix } from "@/lib/gps";
 import { currentSeason } from "@/lib/seasons";
@@ -17,7 +18,8 @@ const MapView = dynamic(() => import("@/components/MapView"), {
 });
 
 export default function MapPage() {
-  const { sb, property, courseName, dogName } = useProperty();
+  const { sb, property, courses, courseName, dogName } = useProperty();
+  const areas = useMemo(() => propertyAreas(property, courses), [property, courses]);
   const [season, setSeason] = useState(currentSeason());
   const [course, setCourse] = useState(ALL);
   const [show, setShow] = useState({ covey: true, contact: true });
@@ -76,6 +78,7 @@ export default function MapPage() {
         fix={fix}
         courseName={courseName}
         dogName={dogName}
+        areas={areas}
         home={property.lat != null && property.lng != null ? { lat: property.lat, lng: property.lng } : null}
         fitKey={`${property.id}|${season}|${course}|${shown.length > 0}`}
       />

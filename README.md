@@ -22,6 +22,7 @@ Built with Next.js 14, Supabase, Leaflet + Esri satellite imagery, and Open-Mete
 | **Harvest** | Adjustable harvest rate & covey size, per-course pressure gauges, 1.3× unrecovered-bird adjustment. |
 | **Map** | Covey finds and contacts on satellite, hybrid (satellite + roads and place names) or USGS topo maps; live updates while hunting. |
 | **Seasons** | Multi-season comparison cards with rate pills. |
+| **Boundaries** | Outline property parcels and courses: upload KML/KMZ (Google Earth, onX), GPX (Garmin) or GeoJSON (surveyor/GIS), paste corner coordinates, or draw on the map. Shows acreage, labels the map, auto-selects the course you're standing in, and sizes offline maps to the property. |
 | **Manage** | Dogs, courses, property location, team invites & roles, danger zone. |
 
 ## Local setup
@@ -42,7 +43,8 @@ npm run dev                  # http://localhost:3000
    npx supabase db push
    ```
    This creates all tables, enables RLS with the role policies, the auto-calc columns/triggers, and adds
-   `gps_marks` to Realtime.
+   `gps_marks` to Realtime. Run every file in `supabase/migrations/` in name order (init, grants,
+   boundaries, …); each later file is a small addition.
 3. **Authentication → Providers → Email**: enabled (magic link is the default).
 4. **Authentication → URL Configuration**:
    - Site URL: your production URL (e.g. `https://coveytracker.com`)

@@ -9,9 +9,11 @@ import {
   offlineSupported,
   planUrls,
   saveOfflineMaps,
+  type OfflineArea,
   type OfflineMapRecord,
   type Progress,
 } from "@/lib/offlineMaps";
+import { padBounds, shapesBounds } from "@/lib/geo";
 import { AVG_TILE_BYTES, formatBytes, MAX_TILES, OFFLINE_STYLES, type OfflineStyle } from "@/lib/tiles";
 import Icon from "./Icon";
 import { useProperty } from "./PropertyProvider";
@@ -29,6 +31,7 @@ export default function OfflineMaps() {
   const [error, setError] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
 
+  const hasOutline = !!property.boundary?.length;
   useEffect(() => {
     setSupported(offlineSupported());
     const r = loadRecord(property.id);
@@ -36,17 +39,27 @@ export default function OfflineMaps() {
     if (r) {
       setRadius(r.radiusMiles);
       setStyles(r.styles);
-    }
-  }, [property.id]);
+    } else if (hasOutline) setRadius(0);
+  }, [property.id, hasOutline]);
 
   useEffect(() => () => abort.current?.abort(), []);
 
-  const hasCenter = property.lat != null && property.lng != null;
-  const planned = hasCenter && styles.length ? planUrls(property.lat!, property.lng!, radius, styles).length : 0;
+  // With a property outline, the default area is the outline plus a quarter-mile margin.
+  const outline = shapesBounds(property.boundary);
+  const hasCenter = (property.lat != null && property.lng != null) || !!outline;
+  const area: OfflineArea | null =
+    radius === 0 && outline
+      ? { bbox: padBounds(outline, 0.25) }
+      : property.lat != null && property.lng != null
+        ? { center: { lat: property.lat, lng: property.lng }, radiusMiles: radius || 2 }
+        : outline
+          ? { bbox: padBounds(outline, 0.25) }
+          : null;
+  const planned = area && styles.length ? planUrls(area, styles).length : 0;
   const tooBig = planned > MAX_TILES;
 
   async function save() {
-    if (!hasCenter || !styles.length) return;
+    if (!area || !styles.length) return;
     setError(null);
     abort.current = new AbortController();
     setProgress({ done: 0, total: planned, failed: 0, bytes: 0 });
@@ -55,8 +68,7 @@ export default function OfflineMaps() {
       import("./MapView").catch(() => {});
       const r = await saveOfflineMaps(
         property.id,
-        { lat: property.lat!, lng: property.lng! },
-        radius,
+        area,
         styles,
         setProgress,
         abort.current.signal,
@@ -103,7 +115,8 @@ export default function OfflineMaps() {
             <div className="flex items-start gap-2 rounded-xl bg-forest-light p-3 text-sm text-forest-dark">
               <Icon name="offline_pin" />
               <div className="flex-1">
-                <strong>Saved on this phone</strong> · {record.radiusMiles} mi around the property ·{" "}
+                <strong>Saved on this phone</strong> ·{" "}
+                {record.radiusMiles ? `${record.radiusMiles} mi around the property` : "property outline + ¼ mi"} ·{" "}
                 {record.styles.map((s) => OFFLINE_STYLES[s].label).join(" + ")} · {formatBytes(record.bytes)}
                 <div className="text-xs opacity-80">
                   {new Date(record.savedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
@@ -113,8 +126,18 @@ export default function OfflineMaps() {
           )}
 
           <div>
-            <span className="label">Area around the property center</span>
+            <span className="label">Area to save</span>
             <div className="flex flex-wrap gap-2">
+              {outline && (
+                <button
+                  type="button"
+                  disabled={!!progress}
+                  className={`chip ${radius === 0 ? "chip-on" : ""}`}
+                  onClick={() => setRadius(0)}
+                >
+                  <Icon name="polyline" className="text-[18px]" /> Property outline
+                </button>
+              )}
               {RADII.map((r) => (
                 <button
                   key={r}

@@ -29,6 +29,7 @@ app/
     counts/page.tsx     # Fall covey count surveys
     harvest/page.tsx    # Harvest budget calculator
     season/page.tsx     # Season dashboard
+    boundaries/page.tsx # Property parcels + course outlines: upload KML/KMZ/GPX/GeoJSON, paste points, draw
     manage/page.tsx     # Dogs, courses, property, team, danger zone
 components/
   PropertyProvider.tsx  # Current user/property/role/dogs/courses context (useProperty)
@@ -52,6 +53,10 @@ lib/
   outbox.ts             # Offline-first ordered write queue (marks, hunts, dog runs, counts), idempotent
   cache.ts              # IndexedDB copies of server data for offline reads
   tiles.ts              # Tile math + saveable USGS basemaps; offlineMaps.ts downloads them
+  geo.ts                # Boundary parsers (KML/GPX/GeoJSON/point lists), acres, point-in-area, bounds
+  boundaryFiles.ts      # Browser file loading for boundaries (unzips KMZ with fflate)
+  areas.ts              # Property/course outlines → map areas (colors, acre labels)
+  coords.ts             # Lat/lng parsing (decimal, N/S/E/W, DMS, pasted pairs)
 public/sw.js            # Service worker: network-first pages, cache-first static assets/fonts, saved USGS tiles
 public/manifest.json    # PWA manifest (start_url /field) + icon-*.png
 types/database.ts       # DB types (hand-maintained; keep as `type`, not `interface`)
@@ -83,7 +88,11 @@ tests/                  # node:test unit tests for lib/ logic
   forbid offline caching, so Esri layers stay online-only and MapView falls back to USGS when offline.
 - The service worker never touches Supabase/Open-Meteo/Esri requests; it serves saved USGS tiles from
   `ct-tiles-v1` and only the explicit download adds to it. Bump `VERSION` in sw.js when changing caching.
-- Popups/user text in Leaflet: build DOM with `textContent`, never innerHTML.
+- Boundaries: `properties.boundary` (parcels) and `courses.boundary` are JSON arrays of
+  `{ name, rings: [[lng, lat], ...][] }` (GeoJSON order; first ring outline, rest holes). Course acres
+  are recalculated from the outline on save. Field Mode preselects the course containing the GPS fix.
+- Popups, tooltips and other user text in Leaflet: build DOM with `textContent`, never innerHTML
+  (tooltips get an HTMLElement, not a string).
 - Roles: owner (everything + team + danger zone), manager (dogs/courses/settings, delete),
   handler (log hunts, marks, counts; may delete only their own unattached marks).
 

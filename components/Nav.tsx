@@ -17,6 +17,7 @@ export const NAV_ITEMS = [
   { href: "/courses", label: "Courses", icon: "landscape" },
   { href: "/counts", label: "Covey Counts", icon: "hearing" },
   { href: "/harvest", label: "Harvest", icon: "speed" },
+  { href: "/boundaries", label: "Boundaries", icon: "polyline" },
   { href: "/season", label: "Seasons", icon: "insights" },
   { href: "/manage", label: "Manage", icon: "settings" },
 ] as const;
