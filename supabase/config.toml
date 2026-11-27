@@ -1,0 +1,6 @@
+# Minimal Supabase CLI config so `supabase link` / `supabase db push` work from this repo.
+project_id = "coveytracker"
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/auth/callback"]
