@@ -3,12 +3,13 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import Icon from "@/components/Icon";
+import OfflineMaps from "@/components/OfflineMaps";
 import { useProperty } from "@/components/PropertyProvider";
-import { CourseSelect, ErrorNote, PageHeader, SeasonSelect } from "@/components/ui";
-import { ALL, errorMessage, fetchMarks } from "@/lib/data";
+import { CourseSelect, ErrorNote, OfflineNote, PageHeader, SeasonSelect } from "@/components/ui";
+import { useMarks } from "@/components/useCounts";
+import { ALL } from "@/lib/data";
 import { watchPosition, type Fix } from "@/lib/gps";
 import { currentSeason } from "@/lib/seasons";
-import type { GpsMarkRow } from "@/types/database";
 
 const MapView = dynamic(() => import("@/components/MapView"), {
   ssr: false,
@@ -20,39 +21,24 @@ export default function MapPage() {
   const [season, setSeason] = useState(currentSeason());
   const [course, setCourse] = useState(ALL);
   const [show, setShow] = useState({ covey: true, contact: true });
-  const [marks, setMarks] = useState<GpsMarkRow[]>([]);
   const [fix, setFix] = useState<Fix | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { marks: loaded, error, offline, reload } = useMarks(season);
+  const marks = useMemo(() => loaded ?? [], [loaded]);
 
+  // Live updates: marks dropped by anyone in the field appear without reloading the page.
   useEffect(() => {
-    let live = true;
-    fetchMarks(sb, property.id, season)
-      .then((m) => live && setMarks(m))
-      .catch((e) => live && setError(errorMessage(e)));
-
-    // Live updates: marks dropped by anyone in the field appear immediately.
     const channel = sb
       .channel(`marks:${property.id}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "gps_marks", filter: `property_id=eq.${property.id}` },
-        (payload) => {
-          if (payload.eventType === "DELETE") {
-            const id = (payload.old as Partial<GpsMarkRow>).id;
-            setMarks((list) => list.filter((m) => m.id !== id));
-            return;
-          }
-          const row = payload.new as GpsMarkRow;
-          if (season !== ALL && row.season !== season) return;
-          setMarks((list) => [...list.filter((m) => m.id !== row.id), row]);
-        },
+        () => reload(),
       )
       .subscribe();
     return () => {
-      live = false;
       sb.removeChannel(channel);
     };
-  }, [sb, property.id, season]);
+  }, [sb, property.id, reload]);
 
   useEffect(() => watchPosition(setFix), []);
 
@@ -69,6 +55,7 @@ export default function MapPage() {
         <CourseSelect value={course} onChange={setCourse} allowAll className="w-auto py-2 text-sm" />
       </PageHeader>
       <ErrorNote error={error} />
+      <OfflineNote show={offline} />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <button
           className={`chip ${show.covey ? "border-covey bg-covey text-white" : ""}`}
@@ -91,6 +78,7 @@ export default function MapPage() {
         dogName={dogName}
         fitKey={`${season}|${course}|${shown.length > 0}`}
       />
+      <OfflineMaps />
     </>
   );
 }

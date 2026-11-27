@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { ALL, fetchSeasons } from "@/lib/data";
 import { currentSeason, seasonList } from "@/lib/seasons";
 import Icon from "./Icon";
 import { useProperty } from "./PropertyProvider";
+import { useCachedQuery } from "./useCachedQuery";
 
 export function PageHeader({ title, icon, children }: { title: string; icon?: string; children?: React.ReactNode }) {
   return (
@@ -21,15 +22,19 @@ export function PageHeader({ title, icon, children }: { title: string; icon?: st
 /** Season choices for the current property (always includes the current season). */
 export function useSeasons(): string[] {
   const { sb, property } = useProperty();
-  const [seasons, setSeasons] = useState<string[]>(() => seasonList([]));
-  useEffect(() => {
-    let live = true;
-    fetchSeasons(sb, property.id).then((s) => live && setSeasons(seasonList(s)));
-    return () => {
-      live = false;
-    };
-  }, [sb, property.id]);
-  return seasons;
+  const q = useCachedQuery(`seasons:${property.id}`, () => fetchSeasons(sb, property.id));
+  return useMemo(() => seasonList(q.data ?? []), [q.data]);
+}
+
+/** Shown when a screen is displaying the phone's last-saved copy because there's no signal. */
+export function OfflineNote({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <div className="mb-3 flex items-center gap-2 rounded-xl bg-sand-dark p-3 text-sm text-bark">
+      <Icon name="cloud_off" className="text-[18px]" />
+      No signal — showing what this phone last saved. It updates when you&apos;re back in range.
+    </div>
+  );
 }
 
 export function useSeasonState(initial: string = currentSeason()) {

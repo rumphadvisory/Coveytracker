@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Icon from "@/components/Icon";
 import { useProperty } from "@/components/PropertyProvider";
 import StatBox from "@/components/StatBox";
-import { CourseSelect, ErrorNote, Loading, NumberField, PageHeader, SeasonSelect } from "@/components/ui";
-import { errorMessage, fetchCounts } from "@/lib/data";
+import { CourseSelect, ErrorNote, Loading, NumberField, OfflineNote, PageHeader, SeasonSelect } from "@/components/ui";
+import { useCounts } from "@/components/useCounts";
+import { errorMessage, type Pending } from "@/lib/data";
+import { enqueue, insertOp, removeQueuedRow, SYNCED_EVENT } from "@/lib/outbox";
 import { formatCoord, getPosition } from "@/lib/gps";
 import { DEFAULT_COVEY_SIZE } from "@/lib/harvest";
 import { currentSeason, formatDate, seasonForDate, todayISO } from "@/lib/seasons";
@@ -27,24 +29,11 @@ const blank = () => ({
 export default function CountsPage() {
   const { sb, property, courses, courseName, canManage } = useProperty();
   const [season, setSeason] = useState(currentSeason());
-  const [counts, setCounts] = useState<CoveyCountRow[] | null>(null);
+  const { counts, error: loadError, offline } = useCounts(season);
   const [form, setForm] = useState(blank);
   const [gpsBusy, setGpsBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setCounts(await fetchCounts(sb, property.id, season));
-    } catch (e) {
-      setError(errorMessage(e));
-      setCounts([]);
-    }
-  }, [sb, property.id, season]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   async function stamp() {
     setGpsBusy(true);
@@ -64,32 +53,42 @@ export default function CountsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function save(e: React.FormEvent) {
+  function save(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     const { lat, lng, date, course_id, coveys_heard, avg_covey_size, acres_surveyed, notes } = form;
-    const rest = { lat, lng, date, course_id, coveys_heard, avg_covey_size, acres_surveyed, notes };
-    const { error } = await sb.from("covey_counts").insert({
-      ...rest,
-      notes: rest.notes || null,
-      course_id: rest.course_id || null,
-      acres_surveyed: rest.acres_surveyed || null,
-      property_id: property.id,
-      season: seasonForDate(rest.date),
-    });
+    // Saved on the phone first, uploaded by QueueSync — works with no signal.
+    enqueue(
+      property.id,
+      insertOp(property.id, "covey_counts", {
+        id: crypto.randomUUID(),
+        lat,
+        lng,
+        date,
+        coveys_heard,
+        avg_covey_size,
+        notes: notes || null,
+        course_id: course_id || null,
+        acres_surveyed: acres_surveyed || null,
+        property_id: property.id,
+        season: seasonForDate(date),
+      }),
+    );
     setSaving(false);
-    if (error) return setError(error.message);
     setForm((x) => ({ ...blank(), date: x.date, course_id: x.course_id, avg_covey_size: x.avg_covey_size }));
     stamp();
-    load();
   }
 
-  async function remove(c: CoveyCountRow) {
+  async function remove(c: Pending<CoveyCountRow>) {
     if (!confirm("Delete this listening point?")) return;
+    if (c._pending) {
+      removeQueuedRow(property.id, c.id);
+      return;
+    }
     const { error } = await sb.from("covey_counts").delete().eq("id", c.id);
     if (error) return setError(error.message);
-    setCounts((l) => l?.filter((x) => x.id !== c.id) ?? null);
+    window.dispatchEvent(new CustomEvent(SYNCED_EVENT)); // refetch
   }
 
   const summary = counts ? countSummary(courses, counts).filter((r) => r.surveys > 0) : [];
@@ -101,7 +100,8 @@ export default function CountsPage() {
       <PageHeader title="Covey Counts" icon="hearing">
         <SeasonSelect value={season} onChange={setSeason} />
       </PageHeader>
-      <ErrorNote error={error} />
+      <ErrorNote error={error ?? loadError} />
+      <OfflineNote show={offline} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <form onSubmit={save} className="card space-y-3">
@@ -196,8 +196,13 @@ export default function CountsPage() {
                       </div>
                       {c.lat != null && c.lng != null && <div className="text-xs text-bark">{formatCoord(c.lat, c.lng)}</div>}
                       {c.notes && <div className="mt-1 text-xs">{c.notes}</div>}
+                      {c._pending && (
+                        <span className="pill mt-1 bg-amber-100 text-amber-900">
+                          <Icon name="cloud_off" className="text-[14px]" /> Waiting to upload
+                        </span>
+                      )}
                     </div>
-                    {canManage && (
+                    {(canManage || c._pending) && (
                       <button className="p-1 text-bark" onClick={() => remove(c)} aria-label="Delete count">
                         <Icon name="delete" className="text-[20px]" />
                       </button>

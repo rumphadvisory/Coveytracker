@@ -35,7 +35,9 @@ components/
   Nav.tsx               # Top nav (desktop) + bottom bar & "More" sheet (mobile)
   HuntWizard.tsx        # 5-step hunt form
   MapView.tsx           # Leaflet wrapper (client-only; load with next/dynamic ssr:false)
-  QueueSync.tsx         # Background mark uploads + offline/pending status strip (useMarkQueue)
+  QueueSync.tsx         # Background uploads of the outbox + offline/pending status strip (useOutbox)
+  useCachedQuery.ts     # Cached-first data hook (IndexedDB copy, then server); useHunts/useCounts/useMarks build on it
+  OfflineMaps.tsx       # "Save maps for offline" panel on the Map page
   ServiceWorker.tsx     # Registers public/sw.js (production only) and pre-caches field pages
   DogChipGrid, WeatherCard, ScentingBadge, HarvestGauge, StatBox, ui.tsx (shared bits)
 lib/
@@ -47,8 +49,10 @@ lib/
   seasons.ts            # Season helpers (Aug–Jul)
   gps.ts                # Geolocation wrapper
   fieldSession.ts       # Active Field Mode session in localStorage
-  markQueue.ts          # Offline-first GPS mark queue (localStorage → gps_marks, idempotent)
-public/sw.js            # Service worker: network-first pages, cache-first static assets/fonts
+  outbox.ts             # Offline-first ordered write queue (marks, hunts, dog runs, counts), idempotent
+  cache.ts              # IndexedDB copies of server data for offline reads
+  tiles.ts              # Tile math + saveable USGS basemaps; offlineMaps.ts downloads them
+public/sw.js            # Service worker: network-first pages, cache-first static assets/fonts, saved USGS tiles
 public/manifest.json    # PWA manifest (start_url /field) + icon-*.png
 types/database.ts       # DB types (hand-maintained; keep as `type`, not `interface`)
 supabase/migrations/    # SQL schema, triggers, RPCs, RLS
@@ -70,11 +74,15 @@ tests/                  # node:test unit tests for lib/ logic
   - hunts.total_contacts = sum(dog_runs.contacts)
 - Harvest adjustment: multiply bag by 1.3× for unrecovered birds (`lib/harvest.ts`).
 - Weather auto-fills on hunt start from Open-Meteo using the property's center.
-- Offline: Field Mode must work with no signal. Marks go through `enqueueMark()` (client UUID)
-  and are uploaded by QueueSync; never insert gps_marks directly from Field Mode. PropertyProvider
-  renders from `ct:cache:*` localStorage first, then refreshes. Sign out clears all `ct:*` keys.
-- The service worker never touches Supabase/Open-Meteo/tile requests. Bump `VERSION` in sw.js when
-  changing caching behaviour.
+- Offline: field data entry must work with no signal. Inserts of gps_marks, hunts, dog_runs and
+  covey_counts go through the outbox (`enqueue(insertOp(...))` with a client `crypto.randomUUID()`),
+  never straight to Supabase. Order matters (hunt before its dog runs and mark updates). Screens read
+  through `useCachedQuery` and merge queued rows (`pending*`, `withPending`, shown "Waiting to upload").
+  PropertyProvider renders from `ct:cache:*` first. Sign out clears `ct:*`, IndexedDB and saved maps.
+- Offline maps: only public-domain USGS tiles (Topo, Imagery+Topo) may be saved; Esri imagery terms
+  forbid offline caching, so Esri layers stay online-only and MapView falls back to USGS when offline.
+- The service worker never touches Supabase/Open-Meteo/Esri requests; it serves saved USGS tiles from
+  `ct-tiles-v1` and only the explicit download adds to it. Bump `VERSION` in sw.js when changing caching.
 - Popups/user text in Leaflet: build DOM with `textContent`, never innerHTML.
 - Roles: owner (everything + team + danger zone), manager (dogs/courses/settings, delete),
   handler (log hunts, marks, counts; may delete only their own unattached marks).
