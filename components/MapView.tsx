@@ -70,8 +70,10 @@ interface Props {
   fix?: Fix | null;
   extraPoints?: ExtraPoint[];
   className?: string;
-  /** Changing this re-runs auto-centering (e.g. when a filter changes). */
+  /** Changing this re-runs auto-centering (e.g. when a filter or the property changes). */
   fitKey?: string;
+  /** The property's saved center. The map opens here (or on the marks), not on the user's GPS. */
+  home?: { lat: number; lng: number } | null;
 }
 
 /** Build popup content with textContent only — never innerHTML — to prevent XSS. */
@@ -89,7 +91,7 @@ function popupNode(title: string, lines: string[]): HTMLElement {
   return root;
 }
 
-export default function MapView({ marks, courseName, dogName, fix, extraPoints = [], className = "", fitKey }: Props) {
+export default function MapView({ marks, courseName, dogName, fix, extraPoints = [], className = "", fitKey, home }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const leafletRef = useRef<typeof L | null>(null);
@@ -119,15 +121,16 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const latest = useRef({ marks, fix, extraPoints, courseName, dogName, fitKey });
-  latest.current = { marks, fix, extraPoints, courseName, dogName, fitKey };
+  const latest = useRef({ marks, fix, extraPoints, courseName, dogName, fitKey, home });
+  latest.current = { marks, fix, extraPoints, courseName, dogName, fitKey, home };
+  const pointsRef = useRef<L.LatLngExpression[]>([]);
 
   // Draw / redraw everything from latest props.
   const draw = () => {
     const Lf = leafletRef.current;
     const map = mapRef.current;
     if (!Lf || !map || !marksLayer.current) return;
-    const { marks, fix, extraPoints, courseName, dogName, fitKey } = latest.current;
+    const { marks, fix, extraPoints, courseName, dogName, fitKey, home } = latest.current;
 
     marksLayer.current.clearLayers();
     const pts: L.LatLngExpression[] = [];
@@ -173,12 +176,13 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
       }
     }
 
-    // Auto-center once per fitKey: marks → bounds, else GPS fix, else default.
+    pointsRef.current = pts;
+    // Auto-center once per fitKey on the property: its marks, else its saved center.
+    // Only fall back to the user's GPS when the property has no location set.
     const key = fitKey ?? "default";
     if (fittedFor.current !== key) {
-      if (pts.length > 0) {
-        const b = Lf.latLngBounds(pts);
-        map.fitBounds(b.pad(0.15), { maxZoom: 17 });
+      if (pts.length > 0 || home) {
+        centerOnProperty();
         fittedFor.current = key;
       } else if (fix) {
         map.setView([fix.lat, fix.lng], 16);
@@ -188,6 +192,27 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
       }
     }
   };
+
+  /** Fit the property's marks, or center on its saved location. */
+  function centerOnProperty() {
+    const Lf = leafletRef.current;
+    const map = mapRef.current;
+    if (!Lf || !map) return;
+    const pts = pointsRef.current;
+    const { home } = latest.current;
+    if (pts.length > 0) {
+      const b = Lf.latLngBounds(pts);
+      if (home) b.extend([home.lat, home.lng]);
+      map.fitBounds(b.pad(0.15), { maxZoom: 16 });
+    } else if (home) {
+      map.setView([home.lat, home.lng], 15);
+    }
+  }
+
+  function centerOnMe() {
+    const { fix } = latest.current;
+    if (fix) mapRef.current?.setView([fix.lat, fix.lng], Math.max(mapRef.current.getZoom(), 16));
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -247,7 +272,7 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
   useEffect(() => {
     if (readyRef.current) draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [marks, fix, extraPoints, fitKey, courseName, dogName]);
+  }, [marks, fix, extraPoints, fitKey, courseName, dogName, home]);
 
   return (
     <div className={`relative overflow-hidden rounded-2xl border border-line ${className}`}>
@@ -273,6 +298,27 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
             {BASEMAPS[id].label}
           </button>
         ))}
+      </div>
+      <div className="absolute bottom-8 right-3 z-[500] flex flex-col gap-2">
+        {(home || marks.length > 0) && (
+          <button
+            type="button"
+            onClick={centerOnProperty}
+            className="flex items-center gap-1 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-ink shadow"
+            aria-label="Center on property"
+          >
+            <span className="material-symbols-outlined text-[18px] text-forest">home_pin</span> Property
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={centerOnMe}
+          disabled={!fix}
+          className="flex items-center gap-1 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-ink shadow disabled:opacity-50"
+          aria-label="Center on my location"
+        >
+          <span className="material-symbols-outlined text-[18px] text-forest">my_location</span> Me
+        </button>
       </div>
       <div className="pointer-events-none absolute bottom-3 left-3 z-[500] rounded-xl bg-white/95 px-3 py-2 text-xs shadow">
         {[

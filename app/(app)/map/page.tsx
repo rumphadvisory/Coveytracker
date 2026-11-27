@@ -76,7 +76,8 @@ export default function MapPage() {
         fix={fix}
         courseName={courseName}
         dogName={dogName}
-        fitKey={`${season}|${course}|${shown.length > 0}`}
+        home={property.lat != null && property.lng != null ? { lat: property.lat, lng: property.lng } : null}
+        fitKey={`${property.id}|${season}|${course}|${shown.length > 0}`}
       />
       <OfflineMaps />
     </>
