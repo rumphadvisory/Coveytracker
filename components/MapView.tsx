@@ -5,7 +5,7 @@ import type * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { DEFAULT_CENTER, type Fix } from "@/lib/gps";
 import { OFFLINE_MAX_ZOOM, OFFLINE_STYLES } from "@/lib/tiles";
-import type { GpsMarkRow } from "@/types/database";
+import type { BoundaryShape, GpsMarkRow } from "@/types/database";
 
 export const MARK_COLORS = { covey: "#e76624", contact: "#257de0", me: "#3d6e38", count: "#7a5c2e" } as const;
 
@@ -74,6 +74,32 @@ interface Props {
   fitKey?: string;
   /** The property's saved center. The map opens here (or on the marks), not on the user's GPS. */
   home?: { lat: number; lng: number } | null;
+  /** Outlined areas: property parcels, courses, or an imported area being reviewed. */
+  areas?: MapArea[];
+  /** Corner points of an outline being drawn ([lat, lng]). */
+  draft?: [number, number][];
+  /** Tap on the map (used for drawing outlines). */
+  onMapClick?: (lat: number, lng: number) => void;
+  /** Covey / contact legend (not useful on the boundaries screen). */
+  showLegend?: boolean;
+  /** Extra controls drawn over the map (bottom-left). */
+  overlay?: React.ReactNode;
+}
+
+export interface MapArea {
+  id: string;
+  label: string;
+  color: string;
+  shapes: BoundaryShape[];
+  /** Property outlines are drawn as a heavy line with no fill; courses get a light fill. */
+  kind: "property" | "course" | "preview";
+}
+
+/** Text label for an area, built with textContent (names are user input). */
+function labelNode(text: string): HTMLElement {
+  const el = document.createElement("div");
+  el.textContent = text;
+  return el;
 }
 
 /** Build popup content with textContent only — never innerHTML — to prevent XSS. */
@@ -91,7 +117,21 @@ function popupNode(title: string, lines: string[]): HTMLElement {
   return root;
 }
 
-export default function MapView({ marks, courseName, dogName, fix, extraPoints = [], className = "", fitKey, home }: Props) {
+export default function MapView({
+  marks,
+  courseName,
+  dogName,
+  fix,
+  extraPoints = [],
+  className = "",
+  fitKey,
+  home,
+  areas = [],
+  draft,
+  onMapClick,
+  showLegend = true,
+  overlay,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const leafletRef = useRef<typeof L | null>(null);
@@ -121,16 +161,54 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const latest = useRef({ marks, fix, extraPoints, courseName, dogName, fitKey, home });
-  latest.current = { marks, fix, extraPoints, courseName, dogName, fitKey, home };
+  const latest = useRef({ marks, fix, extraPoints, courseName, dogName, fitKey, home, areas, draft, onMapClick });
+  latest.current = { marks, fix, extraPoints, courseName, dogName, fitKey, home, areas, draft, onMapClick };
   const pointsRef = useRef<L.LatLngExpression[]>([]);
+  const areaPointsRef = useRef<L.LatLngExpression[]>([]);
+  const areasLayer = useRef<L.LayerGroup | null>(null);
 
   // Draw / redraw everything from latest props.
   const draw = () => {
     const Lf = leafletRef.current;
     const map = mapRef.current;
     if (!Lf || !map || !marksLayer.current) return;
-    const { marks, fix, extraPoints, courseName, dogName, fitKey, home } = latest.current;
+    const { marks, fix, extraPoints, courseName, dogName, fitKey, home, areas, draft } = latest.current;
+
+    // Outlined areas, under the marks.
+    const areaPts: L.LatLngExpression[] = [];
+    if (areasLayer.current) {
+      areasLayer.current.clearLayers();
+      for (const a of areas) {
+        for (const shp of a.shapes) {
+          const rings = shp.rings.map((r) => r.map(([lng, lat]) => [lat, lng] as [number, number]));
+          rings[0]?.forEach((p) => areaPts.push(p));
+          const poly = Lf.polygon(rings, {
+            color: a.color,
+            weight: a.kind === "property" ? 4 : 2.5,
+            dashArray: a.kind === "preview" ? "8 6" : undefined,
+            fillColor: a.color,
+            fillOpacity: a.kind === "property" ? 0 : 0.12,
+            interactive: false,
+          }).addTo(areasLayer.current);
+          if (a.kind !== "property" || a.shapes.length > 1)
+            poly.bindTooltip(labelNode(a.kind === "property" ? shp.name : a.label), {
+              permanent: true,
+              direction: "center",
+              className: "ct-area-label",
+            });
+        }
+      }
+      if (draft?.length) {
+        Lf.polyline(draft.length > 2 ? [...draft, draft[0]] : draft, { color: "#e76624", weight: 3, dashArray: "6 6" }).addTo(
+          areasLayer.current,
+        );
+        for (const p of draft)
+          Lf.circleMarker(p, { radius: 6, color: "#fff", weight: 2, fillColor: "#e76624", fillOpacity: 1 }).addTo(
+            areasLayer.current,
+          );
+      }
+    }
+    areaPointsRef.current = areaPts;
 
     marksLayer.current.clearLayers();
     const pts: L.LatLngExpression[] = [];
@@ -181,7 +259,7 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
     // Only fall back to the user's GPS when the property has no location set.
     const key = fitKey ?? "default";
     if (fittedFor.current !== key) {
-      if (pts.length > 0 || home) {
+      if (pts.length > 0 || areaPts.length > 0 || home) {
         centerOnProperty();
         fittedFor.current = key;
       } else if (fix) {
@@ -198,7 +276,8 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
     const Lf = leafletRef.current;
     const map = mapRef.current;
     if (!Lf || !map) return;
-    const pts = pointsRef.current;
+    // Outlines first: they define the property. Marks and the saved center are included too.
+    const pts = [...areaPointsRef.current, ...pointsRef.current];
     const { home } = latest.current;
     if (pts.length > 0) {
       const b = Lf.latLngBounds(pts);
@@ -222,7 +301,9 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
       leafletRef.current = Lf;
       const map = Lf.map(containerRef.current, { zoomControl: true, attributionControl: true });
       map.setView(DEFAULT_CENTER, 11);
+      areasLayer.current = Lf.layerGroup().addTo(map);
       marksLayer.current = Lf.layerGroup().addTo(map);
+      map.on("click", (e: L.LeafletMouseEvent) => latest.current.onMapClick?.(e.latlng.lat, e.latlng.lng));
       mapRef.current = map;
       readyRef.current = true;
       const saved = readBasemap();
@@ -235,6 +316,7 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
       mapRef.current?.remove();
       mapRef.current = null;
       marksLayer.current = null;
+      areasLayer.current = null;
       meLayer.current = null;
       baseLayer.current = null;
       fittedFor.current = null;
@@ -272,7 +354,7 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
   useEffect(() => {
     if (readyRef.current) draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [marks, fix, extraPoints, fitKey, courseName, dogName, home]);
+  }, [marks, fix, extraPoints, fitKey, courseName, dogName, home, areas, draft]);
 
   return (
     <div className={`relative overflow-hidden rounded-2xl border border-line ${className}`}>
@@ -300,7 +382,7 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
         ))}
       </div>
       <div className="absolute bottom-8 right-3 z-[500] flex flex-col gap-2">
-        {(home || marks.length > 0) && (
+        {(home || marks.length > 0 || areas.length > 0) && (
           <button
             type="button"
             onClick={centerOnProperty}
@@ -320,7 +402,8 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
           <span className="material-symbols-outlined text-[18px] text-forest">my_location</span> Me
         </button>
       </div>
-      <div className="pointer-events-none absolute bottom-3 left-3 z-[500] rounded-xl bg-white/95 px-3 py-2 text-xs shadow">
+      {overlay && <div className="absolute inset-x-3 bottom-8 z-[600]">{overlay}</div>}
+      <div className={`${showLegend ? "" : "hidden"} pointer-events-none absolute bottom-3 left-3 z-[500] rounded-xl bg-white/95 px-3 py-2 text-xs shadow`}>
         {[
           ["Covey find", MARK_COLORS.covey],
           ["Dog contact", MARK_COLORS.contact],

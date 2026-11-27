@@ -8,6 +8,7 @@ import { useProperty } from "@/components/PropertyProvider";
 import { Empty, ErrorNote } from "@/components/ui";
 import { errorMessage } from "@/lib/data";
 import { clearSession, loadSession, saveSession, type FieldSession, type SessionMark } from "@/lib/fieldSession";
+import { containsPoint } from "@/lib/geo";
 import { formatCoord, getPosition, watchPosition, type Fix } from "@/lib/gps";
 import { enqueue, insertOp, removeQueuedRow } from "@/lib/outbox";
 import { useOutbox } from "@/components/QueueSync";
@@ -29,6 +30,7 @@ export default function FieldPage() {
   const [session, setSession] = useState<FieldSession | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [courseId, setCourseId] = useState("");
+  const [pickedCourse, setPickedCourse] = useState(false);
   const [fix, setFix] = useState<Fix | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +40,12 @@ export default function FieldPage() {
   const [now, setNow] = useState(() => Date.now());
   const fixRef = useRef<Fix | null>(null);
   const { ops, flush } = useOutbox();
+
+  // The course whose outline you're standing in (needs course boundaries; see Boundaries).
+  const hereCourse = fix ? courses.find((c) => containsPoint(c.boundary, fix.lat, fix.lng)) : undefined;
+  useEffect(() => {
+    if (!session && !pickedCourse && hereCourse && courseId !== hereCourse.id) setCourseId(hereCourse.id);
+  }, [session, pickedCourse, hereCourse, courseId]);
   const queuedIds = new Set(ops.filter((o) => o.kind === "insert" && o.table === "gps_marks").map((o) => o.id));
 
   useEffect(() => {
@@ -213,16 +221,23 @@ export default function FieldPage() {
         <ErrorNote error={error} />
         <div className="card">
           <span className="label">Select course</span>
+          {hereCourse && (
+            <p className="mb-2 flex items-center gap-1 text-sm text-forest-dark">
+              <Icon name="where_to_vote" className="text-[18px]" /> You&apos;re in <strong>{hereCourse.name}</strong>
+              {courseId === hereCourse.id && !pickedCourse && " — selected for you"}
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-2">
             {courses.map((c) => (
               <button
                 key={c.id}
-                onClick={() => setCourseId(c.id)}
+                onClick={() => (setCourseId(c.id), setPickedCourse(true))}
                 className={`min-h-[56px] rounded-xl border px-3 py-2 text-left font-semibold transition ${
                   courseId === c.id ? "border-forest bg-forest text-white" : "border-line bg-white"
                 }`}
               >
                 {c.name}
+                {hereCourse?.id === c.id && <span className="block text-xs font-normal opacity-80">You&apos;re here</span>}
               </button>
             ))}
           </div>
