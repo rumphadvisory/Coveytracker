@@ -1,12 +1,47 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { DEFAULT_CENTER, type Fix } from "@/lib/gps";
 import type { GpsMarkRow } from "@/types/database";
 
 export const MARK_COLORS = { covey: "#e76624", contact: "#257de0", me: "#3d6e38", count: "#7a5c2e" } as const;
+
+// Base maps. All free and keyless. Hybrid = satellite with road and place-name overlays;
+// Topo = USGS topographic map (US coverage: contours, roads, streams, place names).
+const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
+const BASEMAPS = {
+  satellite: {
+    label: "Satellite",
+    layers: [{ url: `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`, maxNativeZoom: 19 }],
+    attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics",
+  },
+  hybrid: {
+    label: "Hybrid",
+    layers: [
+      { url: `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`, maxNativeZoom: 19 },
+      { url: `${ESRI}/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}`, maxNativeZoom: 19 },
+      { url: `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`, maxNativeZoom: 19 },
+    ],
+    attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics; roads &amp; labels &copy; Esri",
+  },
+  topo: {
+    label: "Topo",
+    layers: [{ url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}", maxNativeZoom: 16 }],
+    attribution: "USGS The National Map",
+  },
+} as const;
+type BasemapId = keyof typeof BASEMAPS;
+const BASEMAP_KEY = "ct:mapLayer";
+
+function readBasemap(): BasemapId {
+  try {
+    const v = localStorage.getItem(BASEMAP_KEY);
+    if (v && v in BASEMAPS) return v as BasemapId;
+  } catch {}
+  return "satellite";
+}
 
 export interface ExtraPoint {
   id: string;
@@ -50,6 +85,8 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
   const meLayer = useRef<L.CircleMarker | null>(null);
   const fittedFor = useRef<string | null>(null);
   const readyRef = useRef(false);
+  const baseLayer = useRef<L.LayerGroup | null>(null);
+  const [basemap, setBasemap] = useState<BasemapId>("satellite");
   const latest = useRef({ marks, fix, extraPoints, courseName, dogName, fitKey });
   latest.current = { marks, fix, extraPoints, courseName, dogName, fitKey };
 
@@ -127,14 +164,13 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
       if (cancelled || !containerRef.current || mapRef.current) return;
       leafletRef.current = Lf;
       const map = Lf.map(containerRef.current, { zoomControl: true, attributionControl: true });
-      Lf.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-        maxZoom: 19,
-        attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics",
-      }).addTo(map);
       map.setView(DEFAULT_CENTER, 11);
       marksLayer.current = Lf.layerGroup().addTo(map);
       mapRef.current = map;
       readyRef.current = true;
+      const saved = readBasemap();
+      setBasemap(saved);
+      showBasemap(saved);
       draw();
     })();
     return () => {
@@ -143,11 +179,37 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
       mapRef.current = null;
       marksLayer.current = null;
       meLayer.current = null;
+      baseLayer.current = null;
       fittedFor.current = null;
       readyRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function showBasemap(id: BasemapId) {
+    const Lf = leafletRef.current;
+    const map = mapRef.current;
+    if (!Lf || !map) return;
+    baseLayer.current?.remove();
+    const def = BASEMAPS[id];
+    const group = Lf.layerGroup(
+      def.layers.map((l, i) =>
+        Lf.tileLayer(l.url, { maxZoom: 19, maxNativeZoom: l.maxNativeZoom, attribution: i === 0 ? def.attribution : undefined }),
+      ),
+    );
+    group.addTo(map);
+    // Keep basemap tiles under the marks.
+    group.eachLayer((t) => (t as L.TileLayer).bringToBack());
+    baseLayer.current = group;
+  }
+
+  function chooseBasemap(id: BasemapId) {
+    setBasemap(id);
+    showBasemap(id);
+    try {
+      localStorage.setItem(BASEMAP_KEY, id);
+    } catch {}
+  }
 
   useEffect(() => {
     if (readyRef.current) draw();
@@ -157,6 +219,23 @@ export default function MapView({ marks, courseName, dogName, fix, extraPoints =
   return (
     <div className={`relative overflow-hidden rounded-2xl border border-line ${className}`}>
       <div ref={containerRef} className="h-full w-full" />
+      <div
+        role="radiogroup"
+        aria-label="Map type"
+        className="absolute right-3 top-3 z-[500] flex overflow-hidden rounded-xl bg-white/95 text-xs font-semibold shadow"
+      >
+        {(Object.keys(BASEMAPS) as BasemapId[]).map((id) => (
+          <button
+            key={id}
+            role="radio"
+            aria-checked={basemap === id}
+            onClick={() => chooseBasemap(id)}
+            className={`px-3 py-2 ${basemap === id ? "bg-forest text-white" : "text-ink"}`}
+          >
+            {BASEMAPS[id].label}
+          </button>
+        ))}
+      </div>
       <div className="pointer-events-none absolute bottom-3 left-3 z-[500] rounded-xl bg-white/95 px-3 py-2 text-xs shadow">
         {[
           ["Covey find", MARK_COLORS.covey],

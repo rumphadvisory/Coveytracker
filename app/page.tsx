@@ -1,8 +1,9 @@
 import Image from "next/image";
 import LoginForm from "@/components/LoginForm";
+import { supabaseConfigured } from "@/lib/supabase/env";
 
 export default function Landing({ searchParams }: { searchParams: { next?: string; error?: string } }) {
-  const configured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const configured = supabaseConfigured;
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">
       <div className="mb-6 text-center">
