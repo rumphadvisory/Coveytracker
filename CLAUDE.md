@@ -5,7 +5,7 @@ Quail plantation hunting management SaaS. GPS covey mapping, dog performance ana
 ## Stack
 - Next.js 14 (App Router) + Tailwind CSS + TypeScript
 - Supabase (Postgres, Auth, Realtime, RLS) via `@supabase/ssr`
-- Leaflet.js + Esri World Imagery for satellite maps
+- Leaflet.js maps: Esri satellite, hybrid (satellite + roads/labels) and USGS topo basemaps
 - Open-Meteo API for weather (no key needed)
 - Vercel for hosting
 

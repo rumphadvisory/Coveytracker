@@ -20,7 +20,7 @@ Built with Next.js 14, Supabase, Leaflet + Esri satellite imagery, and Open-Mete
 | **Weather** | Current conditions, scenting rating, barometric note, Hunt Advisor ranking courses by coveys/hr. |
 | **Covey Counts** | Fall listening surveys, GPS-stamped, estimated population per course. |
 | **Harvest** | Adjustable harvest rate & covey size, per-course pressure gauges, 1.3× unrecovered-bird adjustment. |
-| **Map** | Satellite map of covey finds and contacts, live updates while hunting. |
+| **Map** | Covey finds and contacts on satellite, hybrid (satellite + roads and place names) or USGS topo maps; live updates while hunting. |
 | **Seasons** | Multi-season comparison cards with rate pills. |
 | **Manage** | Dogs, courses, property location, team invites & roles, danger zone. |
 
