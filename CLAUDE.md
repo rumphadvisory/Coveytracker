@@ -24,7 +24,8 @@ app/
     layout.tsx          # PropertyProvider + Nav (auth required)
     field/page.tsx      # Field Mode (GPS marking)
     log/page.tsx        # Hunt logger wizard (?from=field pre-fills from the field session)
-    hunts/page.tsx      # Hunt list with filters
+    hunts/page.tsx      # Hunt list with filters (each links to /hunt?id=…)
+    hunt/page.tsx       # One hunt: map (course, marks, Garmin dog tracks), summary, dogs vs season, timeline, GPX upload
     dogs/page.tsx       # Dog performance
     courses/page.tsx    # Course stats
     weather/page.tsx    # Weather dashboard + scenting + hunt advisor
@@ -60,6 +61,7 @@ lib/
   boundaryFiles.ts      # Browser file loading for boundaries (unzips KMZ with fflate)
   areas.ts              # Property/course outlines → map areas (colors, acre labels)
   coords.ts             # Lat/lng parsing (decimal, N/S/E/W, DMS, pasted pairs)
+  tracks.ts             # Garmin/GPX dog tracks: parse, trim to hunt date, thin, stats, match dog, position at time
 public/sw.js            # Service worker: network-first pages, cache-first static assets/fonts, saved USGS tiles
 public/manifest.json    # PWA manifest (start_url /field) + icon-*.png
 types/database.ts       # DB types (hand-maintained; keep as `type`, not `interface`)
@@ -96,6 +98,9 @@ tests/                  # node:test unit tests for lib/ logic
   are recalculated from the outline on save. Field Mode preselects the course containing the GPS fix.
 - Popups, tooltips and other user text in Leaflet: build DOM with `textContent`, never innerHTML
   (tooltips get an HTMLElement, not a string).
+- Dog tracks (`public.dog_tracks`): imported from GPX after a hunt (online only), one row per dog,
+  `points` = `[lng, lat, unixSeconds][]` thinned to ≥4 s apart (max 3000). Distance skips jumps faster
+  than 18 m/s; "moving" = ≥0.6 m/s. The hunt page is `/hunt?id=` (static, so it's cached for offline).
 - Public routes are `/`, `/login`, `/demo`, `/auth/*` (lib/supabase/middleware.ts PUBLIC_PATHS);
   everything else requires sign-in and redirects to `/login?next=…`.
 - Waitlist (`public.waitlist`): anon may INSERT only; no select policy, so the list is only visible in

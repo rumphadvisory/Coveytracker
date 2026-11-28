@@ -134,6 +134,25 @@ export type CoveyCountRow = {
   created_at: string;
 }
 
+/** [longitude, latitude, unix seconds] */
+export type TrackPoint = [number, number, number];
+
+export type DogTrackRow = {
+  id: string;
+  property_id: string;
+  hunt_id: string;
+  dog_id: string | null;
+  name: string;
+  points: TrackPoint[];
+  distance_m: number;
+  duration_s: number;
+  moving_s: number;
+  started_at: string | null;
+  ended_at: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 export type WaitlistRole = "owner" | "manager" | "dog_man" | "other";
 
 export type WaitlistRow = {
@@ -173,6 +192,7 @@ export type Database = {
       gps_marks: Table<GpsMarkRow, "property_id" | "type" | "lat" | "lng" | "season">;
       covey_counts: Table<CoveyCountRow, "property_id" | "season", "estimated_birds">;
       waitlist: Table<WaitlistRow, "name" | "email">;
+      dog_tracks: Table<DogTrackRow, "property_id" | "hunt_id" | "points">;
     };
     Views: { [_ in never]: never };
     Functions: {
