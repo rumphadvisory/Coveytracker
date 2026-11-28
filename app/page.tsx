@@ -38,13 +38,14 @@ export default function Home() {
       <main>
         {/* Hero */}
         <section className="mx-auto max-w-5xl px-4 pb-12 pt-6 text-center sm:pt-12">
+          {/* Full logo for prominence on the home page; the square badge is used in the tab, header and app icon. */}
           <Image
-            src="/logo-mark.png"
-            alt="CoveyTracker"
-            width={512}
-            height={512}
+            src="/logo-full.png"
+            alt="CoveyTracker: GPS covey mapping and hunting-dog performance analytics for quail plantations"
+            width={1000}
+            height={718}
             priority
-            className="mx-auto h-36 w-36 drop-shadow-sm sm:h-44 sm:w-44"
+            className="mx-auto h-auto w-full max-w-sm sm:max-w-md"
           />
           <span className="mt-6 inline-block rounded-full bg-forest-light px-3 py-1 text-xs font-semibold uppercase tracking-wide text-forest-dark">
             Private beta
