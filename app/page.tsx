@@ -4,8 +4,8 @@ import Icon from "@/components/Icon";
 import WaitlistForm from "@/components/WaitlistForm";
 
 export const metadata = {
-  title: "CoveyTracker · GPS covey mapping for quail plantations",
-  description: "GPS covey mapping, dog performance and harvest tracking for managed quail plantations. Private beta.",
+  title: "CoveyTracker · Quail management intelligence",
+  description: "Quail management intelligence: GPS covey mapping, dog performance and harvest analytics for managed quail plantations. Private beta.",
 };
 
 const FEATURES: [string, string, string][] = [
@@ -50,12 +50,15 @@ export default function Home() {
           <span className="mt-6 inline-block rounded-full bg-forest-light px-3 py-1 text-xs font-semibold uppercase tracking-wide text-forest-dark">
             Private beta
           </span>
-          <h1 className="mx-auto mt-3 max-w-2xl font-display text-3xl leading-tight text-ink sm:text-5xl">
-            Know where every covey is.
+          <p className="mt-4 text-sm font-semibold uppercase tracking-[0.18em] text-forest">
+            Quail management intelligence
+          </p>
+          <h1 className="mx-auto mt-2 max-w-2xl font-display text-3xl leading-tight text-ink sm:text-5xl">
+            Better birds. Better hunts. Every season.
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-base text-bark sm:text-lg">
-            GPS covey mapping, dog performance and harvest tracking for managed quail plantations. Built for the
-            field, and it keeps working where the signal doesn&apos;t.
+            GPS covey mapping, dog performance and harvest analytics, built for the field and working where the
+            signal doesn&apos;t.
           </p>
           <div className="mx-auto mt-6 flex max-w-sm flex-col gap-2 sm:max-w-none sm:flex-row sm:justify-center">
             <a href="#waitlist" className="btn-primary px-6">
