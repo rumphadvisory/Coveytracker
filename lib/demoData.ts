@@ -1,8 +1,8 @@
 // Sample plantation for the public demo (/demo). Entirely made up and generated in the
 // browser from a fixed seed, so every visitor sees the same believable data and nothing
 // touches the real database.
-import { totalAcres } from "./geo";
-import { currentSeason } from "./seasons";
+import { totalAcres } from "./geo.ts";
+import { currentSeason } from "./seasons.ts";
 import type { BoundaryShape, CoveyCountRow, CourseRow, DogRow, GpsMarkRow, HuntWithRuns, LngLat, PropertyRow } from "@/types/database";
 import type { Conditions } from "./weather";
 
@@ -97,7 +97,7 @@ export function buildDemo(): DemoData {
   const weather = ["Clear", "Partly Cloudy", "Overcast", "Mainly Clear", "Foggy"];
   const ground = ["Damp", "Dry", "Frost", "Damp", "Wet"];
 
-  const makeSeason = (s: string, year: number, n: number, quality: number) => {
+  const makeSeason = (s: string, year: number, n: number, quality: number, juvShare: number) => {
     for (let i = 0; i < n; i++) {
       // Hunting days from mid-November through February.
       const day = new Date(year, 10, 15 + Math.floor((i / n) * 100) + Math.floor(r() * 3));
@@ -110,9 +110,13 @@ export function buildDemo(): DemoData {
       const wild = Math.round(seen * (0.15 + r() * 0.2));
       const pointed = seen - wild;
       const shot = Math.max(0, Math.round(pointed * (0.45 + r() * 0.3)));
-      const cocks = Math.round(shot * (1.1 + r() * 0.8));
-      const hens = Math.round(shot * (0.9 + r() * 0.7));
-      const juvenile = Math.round((cocks + hens) * (0.55 + r() * 0.5));
+      // Realistic bag: about 1–2 birds per covey shot, plus a few singles; young birds usually
+      // outnumber adults in a fall bag (better springs → more juveniles).
+      const singles = Math.round(r() * 2);
+      const bag = Math.round(shot * (1.1 + r() * 0.8)) + singles;
+      const juvenile = Math.round(bag * (juvShare - 0.05 + r() * 0.1));
+      const cocks = Math.round((bag - juvenile) * (0.45 + r() * 0.15));
+      const hens = bag - juvenile - cocks;
       const id = `${s}-h${i}`;
       const pair = [Math.floor(r() * 5), Math.floor(r() * 5)];
       if (pair[1] === pair[0]) pair[1] = (pair[0] + 1) % 5;
@@ -139,7 +143,7 @@ export function buildDemo(): DemoData {
         coveys_flushed_wild: wild,
         total_coveys_seen: pointed + wild,
         birds_on_covey_rise: Math.round(seen * (9 + r() * 5)),
-        singles_shot: Math.round(r() * 3),
+        singles_shot: singles,
         total_birds_cocks: cocks,
         total_birds_hens: hens,
         total_birds_adult: cocks + hens,
@@ -163,13 +167,13 @@ export function buildDemo(): DemoData {
       }
     }
   };
-  makeSeason(lastSeason, startYear - 1, 22, 0.92);
-  makeSeason(season, startYear, 16, 1);
+  makeSeason(lastSeason, startYear - 1, 22, 0.82, 0.55);
+  makeSeason(season, startYear, 16, 1, 0.6);
   hunts.sort((a, b) => b.date.localeCompare(a.date));
 
   const counts: CoveyCountRow[] = courses.map((c, i) => {
     const [lat, lng] = pointIn(c.boundary![0], r);
-    const heard = [11, 8, 10, 7][i];
+    const heard = [34, 30, 14, 31][i];
     return {
       id: `k${i}`,
       property_id: P,

@@ -15,7 +15,7 @@ app/
   layout.tsx            # Root layout, fonts (Libre Baskerville / DM Sans), Material Symbols
   page.tsx              # Public home page: overview, features, waitlist form, "Beta sign-in"
   login/page.tsx        # Magic-link / code sign-in (signed-in users are sent to /field)
-  demo/page.tsx         # Public tap-around demo on sample data (lib/demoData.ts); nothing saved
+  demo/page.tsx         # Public guided tour on sample data (lib/demoData.ts): 8 steps ending in season decisions
   robots.ts             # Private beta: disallow all crawlers (root layout also sets noindex)
   auth/callback/        # Magic link + token_hash exchange
   auth/signout/         # POST sign out
@@ -62,6 +62,8 @@ lib/
   areas.ts              # Property/course outlines → map areas (colors, acre labels)
   coords.ts             # Lat/lng parsing (decimal, N/S/E/W, DMS, pasted pairs)
   tracks.ts             # Garmin/GPX dog tracks: parse, trim to hunt date, thin, stats, match dog, position at time
+  insights.ts           # Season → management decisions (best course, harvest pressure, trend, reproduction, dogs, hunt quality)
+  demoData.ts           # Seeded sample plantation for /demo
 public/sw.js            # Service worker: network-first pages, cache-first static assets/fonts, saved USGS tiles
 public/manifest.json    # PWA manifest (start_url /field) + icon-*.png
 types/database.ts       # DB types (hand-maintained; keep as `type`, not `interface`)
