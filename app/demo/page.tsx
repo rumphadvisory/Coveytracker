@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import HarvestGauge from "@/components/HarvestGauge";
 import Icon from "@/components/Icon";
 import ScentingBadge from "@/components/ScentingBadge";
@@ -16,6 +16,7 @@ import { harvestLine, UNRECOVERED_MULTIPLIER } from "@/lib/harvest";
 import { formatDate } from "@/lib/seasons";
 import { advisorRanking, countSummary, courseStats, dogStats, fmtPct, fmtRate, rates, totals } from "@/lib/stats";
 import { pressureNote } from "@/lib/weather";
+import { seasonInsights, type Insight, type InsightTopic } from "@/lib/insights";
 import type { GpsMarkRow } from "@/types/database";
 
 const MapView = dynamic(() => import("@/components/MapView"), {
@@ -23,44 +24,156 @@ const MapView = dynamic(() => import("@/components/MapView"), {
   loading: () => <div className="h-full w-full animate-pulse rounded-2xl bg-sand-dark" />,
 });
 
-const TABS = [
-  ["field", "my_location", "Field"],
-  ["map", "map", "Map"],
-  ["dogs", "pets", "Dogs"],
-  ["courses", "landscape", "Courses"],
-  ["harvest", "speed", "Harvest"],
-  ["weather", "partly_cloudy_day", "Weather"],
-  ["seasons", "insights", "Seasons"],
-] as const;
-type Tab = (typeof TABS)[number][0];
+type StepId = "field" | "map" | "dogs" | "courses" | "harvest" | "weather" | "seasons" | "insights";
 
-const INTRO: Record<Tab, string> = {
-  field: "What the dog man sees on the course. Pick a course, start a hunt, and tap the buttons. Each tap drops a GPS mark.",
-  map: "Every covey find (orange) and dog contact (blue) this season, on satellite, hybrid or topo maps with the courses outlined.",
-  dogs: "Dogs ranked by contacts this season, with hours and contacts per hour.",
-  courses: "How each course is producing: coveys seen, birds, and shot-versus-seen.",
-  harvest: "Fall covey counts set each course's population; the harvest is tracked against a sustainable budget.",
-  weather: "Current conditions, a scenting rating, and which courses are producing the most coveys per hour.",
-  seasons: "Season-over-season totals and rates.",
+interface Step {
+  id: StepId;
+  icon: string;
+  label: string;
+  title: string;
+  lead: string;
+  notice: string[];
+  /** Which computed insights belong under "Use it to decide" on this step. */
+  topics: InsightTopic[];
+  /** A decision that isn't a computed insight (map and weather steps). */
+  decide?: string;
+}
+
+const STEPS: Step[] = [
+  {
+    id: "field",
+    icon: "my_location",
+    label: "Field",
+    title: "Mark coveys as you hunt",
+    lead: "This is what the dog man sees on the course: two big buttons, used one-handed. Every tap is GPS-stamped and works with no signal.",
+    notice: ["The app picks the course you're standing in.", "Weather fills in automatically when the hunt starts."],
+    topics: [],
+  },
+  {
+    id: "map",
+    icon: "map",
+    label: "Map",
+    title: "See where the birds are",
+    lead: "Every covey find (orange) and dog contact (blue) this season, on the courses you outlined.",
+    notice: ["Where coveys cluster, and which parts of a course are empty.", "Switch Satellite, Hybrid and Topo at the top right."],
+    topics: [],
+    decide: "Plan burns, food plots and feeding around where coveys are (and aren't), and start hunts where birds concentrate.",
+  },
+  {
+    id: "dogs",
+    icon: "pets",
+    label: "Dogs",
+    title: "Know which dogs are finding birds",
+    lead: "Each dog ranked by contacts this season, with hours and contacts per hour so long days don't skew the picture.",
+    notice: ["Contacts per hour is the fair comparison.", "Garmin tracks add miles and time moving on each hunt."],
+    topics: ["dogs"],
+  },
+  {
+    id: "courses",
+    icon: "landscape",
+    label: "Courses",
+    title: "See which courses produce",
+    lead: "Coveys, points, shooting and birds for every course, so you can compare ground fairly.",
+    notice: ["Coveys per hour shows which ground is producing.", "Shot vs seen and wild flushes show how hunts are going."],
+    topics: ["course", "quality"],
+  },
+  {
+    id: "harvest",
+    icon: "speed",
+    label: "Harvest",
+    title: "Harvest sustainably",
+    lead: "Fall covey counts set each course's population. The bag (×1.3 for unrecovered birds) is tracked against a sustainable budget.",
+    notice: ["Green is light pressure, yellow is close to budget, red is over.", "The harvest rate is adjustable in the app."],
+    topics: ["harvest"],
+  },
+  {
+    id: "weather",
+    icon: "partly_cloudy_day",
+    label: "Weather",
+    title: "Pick the day and the course",
+    lead: "Current conditions, a scenting rating for the dogs, and which courses are producing the most coveys per hour.",
+    notice: ["Scenting is rated from temperature, humidity, wind and dew point.", "High, rising pressure tends to mean more coveys per hour."],
+    topics: [],
+    decide: "On a good scenting day, run your best dogs on your most productive course. On a poor one, shorten hunts or save your best ground.",
+  },
+  {
+    id: "seasons",
+    icon: "insights",
+    label: "Seasons",
+    title: "Track the trend year over year",
+    lead: "Season totals and rates side by side, so you can see whether management is working.",
+    notice: ["Coveys per hour is a population index from your own hunts.", "Juveniles per adult reflects how the nesting season went."],
+    topics: ["trend", "reproduction"],
+  },
+  {
+    id: "insights",
+    icon: "lightbulb",
+    label: "Takeaways",
+    title: "What your season is telling you",
+    lead: "Everything above adds up to decisions: where to hunt, where to ease off, and what to change before next season.",
+    notice: [],
+    topics: ["course", "harvest", "trend", "reproduction", "dogs", "quality"],
+  },
+];
+
+const TONE: Record<Insight["tone"], string> = {
+  good: "border-forest/30 bg-forest-light/60",
+  watch: "border-amber-300 bg-amber-50",
+  neutral: "border-line bg-sand",
 };
+
+function InsightCard({ i }: { i: Insight }) {
+  return (
+    <div className={`rounded-2xl border p-4 ${TONE[i.tone]}`}>
+      <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+        <Icon name={i.icon} className={i.tone === "watch" ? "text-amber-700" : "text-forest"} />
+        {i.title}
+        {i.tone === "watch" && <span className="pill ml-auto bg-amber-200 text-amber-900">Watch</span>}
+      </div>
+      <p className="mt-2 text-sm text-ink">{i.finding}</p>
+      <p className="mt-2 flex gap-1.5 text-sm text-bark">
+        <Icon name="arrow_forward" className="mt-0.5 text-[16px] text-forest" />
+        <span>{i.action}</span>
+      </p>
+    </div>
+  );
+}
 
 export default function DemoPage() {
   const d = useMemo(buildDemo, []);
-  const [tab, setTab] = useState<Tab>("field");
+  const [step, setStep] = useState(-1); // -1 = intro
   const [sessionMarks, setSessionMarks] = useState<GpsMarkRow[]>([]);
+  const [fieldDone, setFieldDone] = useState(false);
 
   const courseName = (id: string | null) => d.courses.find((c) => c.id === id)?.name ?? "No course";
   const dogName = (id: string | null) => d.dogs.find((x) => x.id === id)?.name ?? "—";
   const areas = useMemo(() => propertyAreas(d.property, d.courses), [d]);
   const seasonHunts = d.hunts.filter((h) => h.season === d.season);
+  const insights = useMemo(
+    () =>
+      seasonInsights({
+        hunts: d.hunts.filter((h) => h.season === d.season),
+        lastSeasonHunts: d.hunts.filter((h) => h.season === d.lastSeason),
+        courses: d.courses,
+        dogs: d.dogs,
+        counts: d.counts,
+      }),
+    [d],
+  );
+
+  const go = (n: number) => {
+    setStep(n);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const cur = step >= 0 ? STEPS[step] : null;
+  const last = step === STEPS.length - 1;
+  const myCourse = sessionMarks.length ? courseName(sessionMarks[sessionMarks.length - 1].course_id) : null;
 
   return (
     <div className="min-h-screen bg-sand">
       <div className="sticky top-0 z-[1001] bg-ink px-4 py-2 text-center text-xs font-semibold text-white">
-        Demo with a made-up plantation. Nothing you do here is saved.{" "}
-        <Link href="/#waitlist" className="ml-1 underline">
-          Join the waiting list
-        </Link>
+        Demo with a made-up plantation. Nothing you do here is saved.
       </div>
       <header className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
         <Link href="/" className="flex items-center gap-2">
@@ -70,122 +183,250 @@ export default function DemoPage() {
         <span className="ml-auto truncate text-sm font-semibold text-bark">{d.property.name}</span>
       </header>
 
-      <nav className="mx-auto max-w-5xl overflow-x-auto px-4" aria-label="Demo sections">
-        <div className="flex gap-1.5 pb-2">
-          {TABS.map(([id, icon, label]) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              className={`chip shrink-0 ${tab === id ? "chip-on" : ""}`}
-              aria-pressed={tab === id}
-            >
-              <Icon name={icon} className="text-[18px]" /> {label}
-            </button>
-          ))}
-        </div>
-      </nav>
-
-      <main className="mx-auto max-w-5xl px-4 pb-16 pt-2">
-        <p className="mb-4 text-sm text-bark">{INTRO[tab]}</p>
-        {tab === "field" && <FieldDemo d={d} onMark={(m) => setSessionMarks((s) => [...s, m])} marks={sessionMarks} />}
-        {tab === "map" && (
-          <MapView
-            className="h-[60vh] min-h-[320px]"
-            marks={[...d.marks, ...sessionMarks]}
-            courseName={courseName}
-            dogName={dogName}
-            areas={areas}
-            home={{ lat: d.property.lat!, lng: d.property.lng! }}
-            fitKey="demo"
-          />
-        )}
-        {tab === "dogs" && <DogsDemo d={d} />}
-        {tab === "courses" && (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {courseStats(d.courses, seasonHunts).map(({ course, totals: t, rates: r }) => (
-              <section key={course.id} className="card">
-                <div className="mb-3 flex items-baseline gap-2">
-                  <h2 className="h-section">{course.name}</h2>
-                  <span className="text-xs text-bark">
-                    {t.hunts} hunts · {+t.hours.toFixed(1)} h · {formatAcres(course.acres ?? 0)}
+      {step === -1 ? (
+        <main className="mx-auto max-w-2xl px-4 pb-16 pt-4">
+          <h1 className="text-center font-display text-3xl text-ink">See CoveyTracker in 2 minutes</h1>
+          <p className="mx-auto mt-2 max-w-md text-center text-bark">
+            A guided tour of a sample plantation, from marking a covey in the field to the season decisions it adds up to.
+          </p>
+          <ol className="mt-6 space-y-2">
+            {STEPS.map((st, n) => (
+              <li key={st.id}>
+                <button onClick={() => go(n)} className="card flex w-full items-center gap-3 py-3 text-left hover:border-forest">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-forest-light font-semibold text-forest-dark">
+                    {n + 1}
                   </span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <StatBox label="Coveys seen" value={t.coveysSeen} accent="#e76624" />
-                  <StatBox label="Pointed" value={t.pointed} />
-                  <StatBox label="Shot" value={t.shot} />
-                  <StatBox label="Contacts" value={t.contacts} accent="#257de0" />
-                  <StatBox label="Total birds" value={t.totalBirds} />
-                  <StatBox label="Juvenile" value={t.juvenile} />
-                </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  <RatePill label="Shot vs seen" value={fmtPct(r.shotVsSeen)} />
-                  <RatePill label="% juvenile" value={fmtPct(r.pctJuvenile)} />
-                  <RatePill label="Coveys/hr" value={fmtRate(r.coveysPerHour)} />
+                  <Icon name={st.icon} className="text-forest" />
+                  <span className="flex-1 font-semibold">{st.title}</span>
+                  <Icon name="chevron_right" className="text-bark" />
+                </button>
+              </li>
+            ))}
+          </ol>
+          <button className="btn-primary mt-6 h-14 w-full text-base" onClick={() => go(0)}>
+            <Icon name="play_arrow" fill /> Start the tour
+          </button>
+          <p className="mt-2 text-center text-xs text-bark">Or tap any step to jump straight to it.</p>
+        </main>
+      ) : (
+        <>
+          <nav className="mx-auto max-w-5xl overflow-x-auto px-4" aria-label="Jump to a step">
+            <div className="flex gap-1.5 pb-2">
+              {STEPS.map((st, n) => (
+                <button
+                  key={st.id}
+                  onClick={() => go(n)}
+                  className={`chip shrink-0 min-h-[34px] px-3 py-1 text-xs ${n === step ? "chip-on" : ""}`}
+                  aria-current={n === step ? "step" : undefined}
+                >
+                  <Icon name={st.icon} className="text-[16px]" /> {st.label}
+                </button>
+              ))}
+            </div>
+          </nav>
+
+          <main className="mx-auto max-w-5xl px-4 pb-32 pt-2">
+            <div className="mb-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-forest">
+                Step {step + 1} of {STEPS.length}
+              </div>
+              <h1 className="mt-1 font-display text-2xl text-ink sm:text-3xl">{cur!.title}</h1>
+              <p className="mt-1 max-w-2xl text-sm text-bark sm:text-base">{cur!.lead}</p>
+              {cur!.notice.length > 0 && (
+                <ul className="mt-3 flex flex-col gap-1 text-sm text-ink sm:flex-row sm:flex-wrap sm:gap-x-5">
+                  {cur!.notice.map((n) => (
+                    <li key={n} className="flex items-start gap-1.5">
+                      <Icon name="visibility" className="mt-0.5 text-[16px] text-forest" /> {n}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {cur!.id === "field" && (
+              <FieldDemo
+                d={d}
+                marks={sessionMarks}
+                onMark={(m) => setSessionMarks((x) => [...x, m])}
+                onDone={() => setFieldDone(true)}
+              />
+            )}
+            {cur!.id === "map" && (
+              <>
+                {myCourse && (
+                  <p className="mb-2 flex items-center gap-1.5 rounded-xl bg-forest-light p-3 text-sm text-forest-dark">
+                    <Icon name="where_to_vote" /> Your {sessionMarks.length} mark{sessionMarks.length === 1 ? "" : "s"} from the
+                    field are on {myCourse}, alongside the season&apos;s finds.
+                  </p>
+                )}
+                <MapView
+                  className="h-[55vh] min-h-[320px]"
+                  marks={[...d.marks, ...sessionMarks]}
+                  courseName={courseName}
+                  dogName={dogName}
+                  areas={areas}
+                  home={{ lat: d.property.lat!, lng: d.property.lng! }}
+                  fitKey="demo"
+                />
+              </>
+            )}
+            {cur!.id === "dogs" && <DogsDemo d={d} />}
+            {cur!.id === "courses" && (
+              <div className="grid gap-3 lg:grid-cols-2">
+                {courseStats(d.courses, seasonHunts).map(({ course, totals: t, rates: r }) => (
+                  <section key={course.id} className="card">
+                    <div className="mb-3 flex items-baseline gap-2">
+                      <h2 className="h-section">{course.name}</h2>
+                      <span className="text-xs text-bark">
+                        {t.hunts} hunts · {+t.hours.toFixed(1)} h · {formatAcres(course.acres ?? 0)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <StatBox label="Coveys seen" value={t.coveysSeen} accent="#e76624" />
+                      <StatBox label="Pointed" value={t.pointed} />
+                      <StatBox label="Shot" value={t.shot} />
+                      <StatBox label="Contacts" value={t.contacts} accent="#257de0" />
+                      <StatBox label="Total birds" value={t.totalBirds} />
+                      <StatBox label="Juvenile" value={t.juvenile} />
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <RatePill label="Coveys/hr" value={fmtRate(r.coveysPerHour)} />
+                      <RatePill label="Shot vs seen" value={fmtPct(r.shotVsSeen)} />
+                      <RatePill label="% juvenile" value={fmtPct(r.pctJuvenile)} />
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+            {cur!.id === "harvest" && <HarvestDemo d={d} />}
+            {cur!.id === "weather" && <WeatherDemo d={d} />}
+            {cur!.id === "seasons" && (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {[d.season, d.lastSeason].map((s) => {
+                  const t = totals(d.hunts.filter((h) => h.season === s));
+                  const r = rates(t);
+                  return (
+                    <section key={s} className="card">
+                      <div className="mb-3 flex items-baseline gap-2">
+                        <h2 className="h-section">{s}</h2>
+                        <span className="text-xs text-bark">
+                          {t.hunts} hunts · {+t.hours.toFixed(1)} hours
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                        <StatBox label="Total coveys" value={t.coveysSeen} accent="#e76624" />
+                        <StatBox label="Contacts" value={t.contacts} accent="#257de0" />
+                        <StatBox label="Shot" value={t.shot} />
+                        <StatBox label="Total birds" value={t.totalBirds} />
+                        <StatBox label="Adults" value={t.adult} />
+                        <StatBox label="Juvenile" value={t.juvenile} />
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        <RatePill label="Coveys/hr" value={fmtRate(r.coveysPerHour)} />
+                        <RatePill label="Contacts/hr" value={fmtRate(r.contactsPerHour)} />
+                        <RatePill label="Juv. per adult" value={t.adult ? (t.juvenile / t.adult).toFixed(2) : "—"} />
+                        <RatePill label="Shot vs seen" value={fmtPct(r.shotVsSeen)} />
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+
+            {(cur!.topics.length > 0 || cur!.decide) && (
+              <section className="mt-6">
+                <h2 className="mb-2 flex items-center gap-2 font-display text-lg text-ink">
+                  <Icon name="lightbulb" className="text-covey" />
+                  {cur!.id === "insights" ? "This season at Magnolia Bend" : "Use it to decide"}
+                </h2>
+                <div className={`grid gap-3 ${cur!.id === "insights" ? "md:grid-cols-2" : ""}`}>
+                  {cur!.decide && (
+                    <div className="rounded-2xl border border-line bg-white p-4 text-sm text-ink">
+                      <span className="flex gap-1.5">
+                        <Icon name="arrow_forward" className="mt-0.5 text-[16px] text-forest" /> {cur!.decide}
+                      </span>
+                    </div>
+                  )}
+                  {insights
+                    .filter((i) => cur!.topics.includes(i.topic))
+                    .map((i) => (
+                      <InsightCard key={i.topic} i={i} />
+                    ))}
                 </div>
               </section>
-            ))}
-          </div>
-        )}
-        {tab === "harvest" && <HarvestDemo d={d} />}
-        {tab === "weather" && <WeatherDemo d={d} />}
-        {tab === "seasons" && (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {[d.season, d.lastSeason].map((s) => {
-              const t = totals(d.hunts.filter((h) => h.season === s));
-              const r = rates(t);
-              return (
-                <section key={s} className="card">
-                  <div className="mb-3 flex items-baseline gap-2">
-                    <h2 className="h-section">{s}</h2>
-                    <span className="text-xs text-bark">
-                      {t.hunts} hunts · {+t.hours.toFixed(1)} hours
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                    <StatBox label="Total coveys" value={t.coveysSeen} accent="#e76624" />
-                    <StatBox label="Contacts" value={t.contacts} accent="#257de0" />
-                    <StatBox label="Pointed" value={t.pointed} />
-                    <StatBox label="Shot" value={t.shot} />
-                    <StatBox label="Total birds" value={t.totalBirds} />
-                    <StatBox label="Cocks" value={t.cocks} />
-                    <StatBox label="Hens" value={t.hens} />
-                    <StatBox label="Juvenile" value={t.juvenile} />
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    <RatePill label="Coveys/hr" value={fmtRate(r.coveysPerHour)} />
-                    <RatePill label="Contacts/hr" value={fmtRate(r.contactsPerHour)} />
-                    <RatePill label="Shot vs seen" value={fmtPct(r.shotVsSeen)} />
-                    <RatePill label="% juvenile" value={fmtPct(r.pctJuvenile)} />
-                  </div>
-                </section>
-              );
-            })}
-          </div>
-        )}
+            )}
 
-        <section className="card mt-8 text-center">
-          <h2 className="font-display text-xl">Want this on your plantation?</h2>
-          <p className="mx-auto mt-1 max-w-md text-sm text-bark">
-            CoveyTracker is in private beta. Join the waiting list and we&apos;ll be in touch.
-          </p>
-          <Link href="/#waitlist" className="btn-primary mt-4">
-            <Icon name="how_to_reg" /> Join the waiting list
-          </Link>
-        </section>
-      </main>
+            {last && (
+              <section className="card mt-8 text-center">
+                <h2 className="font-display text-xl">Want this for your plantation?</h2>
+                <p className="mx-auto mt-1 max-w-md text-sm text-bark">
+                  CoveyTracker turns every hunt into the records behind these decisions. It&apos;s in private beta; join the
+                  waiting list and we&apos;ll be in touch.
+                </p>
+                <Link href="/#waitlist" className="btn-primary mt-4">
+                  <Icon name="how_to_reg" /> Join the waiting list
+                </Link>
+              </section>
+            )}
+          </main>
+
+          {/* Tour controls, always in reach. */}
+          <div className="fixed inset-x-0 bottom-0 z-[1001] border-t border-line bg-white/95 px-4 py-3 backdrop-blur" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}>
+            <div className="mx-auto flex max-w-2xl items-center gap-3">
+              <button className="btn-secondary" onClick={() => go(step - 1)} aria-label={step === 0 ? "Back to the tour overview" : "Previous step"}>
+                <Icon name="arrow_back" /> <span className="hidden sm:inline">Back</span>
+              </button>
+              <div className="flex flex-1 justify-center gap-1.5" aria-hidden>
+                {STEPS.map((st, n) => (
+                  <span key={st.id} className={`h-2 rounded-full transition-all ${n === step ? "w-6 bg-forest" : n < step ? "w-2 bg-forest/50" : "w-2 bg-line"}`} />
+                ))}
+              </div>
+              {last ? (
+                <Link href="/#waitlist" className="btn-primary">
+                  <Icon name="how_to_reg" /> Join waitlist
+                </Link>
+              ) : (
+                <button
+                  className={`btn-primary ${cur!.id === "field" && fieldDone ? "ring-4 ring-amber-300 animate-pulse" : ""}`}
+                  onClick={() => go(step + 1)}
+                >
+                  Next <Icon name="arrow_forward" />
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 type D = ReturnType<typeof buildDemo>;
 
-function FieldDemo({ d, marks, onMark }: { d: D; marks: GpsMarkRow[]; onMark: (m: GpsMarkRow) => void }) {
+const PULSE = "ring-4 ring-amber-300 animate-pulse";
+
+/** Coaching bubble for the Field step. */
+function Coach({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 rounded-2xl border-2 border-amber-300 bg-amber-50 p-3 text-sm font-medium text-ink" role="status">
+      <Icon name="touch_app" className="text-amber-700" />
+      <span>{children}</span>
+    </div>
+  );
+}
+
+function FieldDemo({ d, marks, onMark, onDone }: { d: D; marks: GpsMarkRow[]; onMark: (m: GpsMarkRow) => void; onDone: () => void }) {
   const [courseId, setCourseId] = useState(d.courses[0].id);
   const [active, setActive] = useState(false);
   const [picker, setPicker] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const course = d.courses.find((c) => c.id === courseId)!;
+  const told = useRef(false);
+  const onDoneOnce = () => {
+    if (told.current) return;
+    told.current = true;
+    setTimeout(onDone, 0); // after render
+  };
   const mine = marks.filter((m) => m.course_id === courseId);
 
   function drop(type: "covey" | "contact", dogId: string | null = null) {
@@ -216,6 +457,7 @@ function FieldDemo({ d, marks, onMark }: { d: D; marks: GpsMarkRow[]; onMark: (m
   if (!active) {
     return (
       <div className="mx-auto max-w-md space-y-4">
+        <Coach>Pick a course, then tap <strong>Start hunt</strong>.</Coach>
         <div className="card">
           <span className="label">Select course</span>
           <p className="mb-2 flex items-center gap-1 text-sm text-forest-dark">
@@ -233,7 +475,7 @@ function FieldDemo({ d, marks, onMark }: { d: D; marks: GpsMarkRow[]; onMark: (m
             ))}
           </div>
         </div>
-        <button className="btn-primary h-16 w-full text-lg" onClick={() => setActive(true)}>
+        <button className={`btn-primary h-16 w-full text-lg ${PULSE}`} onClick={() => setActive(true)}>
           <Icon name="play_arrow" fill /> Start hunt
         </button>
       </div>
@@ -241,8 +483,28 @@ function FieldDemo({ d, marks, onMark }: { d: D; marks: GpsMarkRow[]; onMark: (m
   }
 
   const coveys = mine.filter((m) => m.type === "covey").length;
+  const contacts = mine.length - coveys;
+  const stage = coveys === 0 ? "covey" : contacts === 0 ? "contact" : "done";
+  if (stage === "done") onDoneOnce();
   return (
     <div className="mx-auto max-w-md space-y-3">
+      <Coach>
+        {stage === "covey" && (
+          <>
+            The dogs pointed a covey. Tap <strong>Mark Covey</strong>; it records the exact spot and time.
+          </>
+        )}
+        {stage === "contact" && (
+          <>
+            Now a dog found birds: tap <strong>Dog Contact</strong> and choose the dog.
+          </>
+        )}
+        {stage === "done" && (
+          <>
+            That&apos;s all there is to it in the field. Tap <strong>Next</strong> to see your marks on the map.
+          </>
+        )}
+      </Coach>
       <div className="card flex items-center gap-3 py-3">
         <div className="min-w-0 flex-1">
           <div className="truncate font-display text-lg">{course.name}</div>
@@ -253,15 +515,15 @@ function FieldDemo({ d, marks, onMark }: { d: D; marks: GpsMarkRow[]; onMark: (m
         </span>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <button onClick={() => drop("covey")} className="flex h-40 flex-col items-center justify-center gap-1 rounded-3xl bg-covey text-white shadow-lg active:scale-[0.97]">
+        <button onClick={() => drop("covey")} className={`flex h-40 flex-col items-center justify-center gap-1 rounded-3xl bg-covey text-white shadow-lg active:scale-[0.97] ${stage === "covey" ? PULSE : ""}`}>
           <Icon name="location_on" fill className="text-5xl" />
           <span className="text-lg font-bold">Mark Covey</span>
           <span className="text-sm opacity-90">{coveys} this hunt</span>
         </button>
-        <button onClick={() => setPicker(true)} className="flex h-40 flex-col items-center justify-center gap-1 rounded-3xl bg-contact text-white shadow-lg active:scale-[0.97]">
+        <button onClick={() => setPicker(true)} className={`flex h-40 flex-col items-center justify-center gap-1 rounded-3xl bg-contact text-white shadow-lg active:scale-[0.97] ${stage === "contact" && !picker ? PULSE : ""}`}>
           <Icon name="pets" fill className="text-5xl" />
           <span className="text-lg font-bold">Dog Contact</span>
-          <span className="text-sm opacity-90">{mine.length - coveys} this hunt</span>
+          <span className="text-sm opacity-90">{contacts} this hunt</span>
         </button>
       </div>
       {flash && (
