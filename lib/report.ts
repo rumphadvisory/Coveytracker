@@ -230,7 +230,9 @@ export function buildReport(input: ReportInput): Report {
 
   const insights = seasonInsights({ hunts: seasonHunts, lastSeasonHunts: seasonPrior, courses, dogs, counts: seasonCounts, harvestRate });
 
-  // Outlook: what to do next.
+  // Outlook: what to do next. Most quail seasons close around the end of February.
+  const seasonEnd = parse(`${Number(season.slice(0, 4)) + 1}-03-01`);
+  const weeksToSeasonEnd = Math.max(0, (seasonEnd.getTime() - parse(today).getTime()) / (7 * 86_400_000));
   const outlook: string[] = [];
   if (harvest) {
     if (harvest.remaining <= 0)
@@ -238,7 +240,11 @@ export function buildReport(input: ReportInput): Report {
     else
       outlook.push(
         `${harvest.remaining} birds left in the season's harvest budget (${Math.round((harvest.used ?? 0) * 100)}% used).${
-          harvest.weeksLeft != null ? ` At the current pace of ${Math.round(harvest.perWeek!)} a week, that lasts about ${Math.round(harvest.weeksLeft)} more weeks.` : ""
+          harvest.weeksLeft == null
+            ? ""
+            : harvest.weeksLeft >= weeksToSeasonEnd
+              ? ` At the current pace of ${Math.round(harvest.perWeek!)} a week, that covers the rest of the season with room to spare.`
+              : ` At the current pace of ${Math.round(harvest.perWeek!)} a week, that lasts about ${Math.max(1, Math.round(harvest.weeksLeft))} more weeks, before the season ends: ease off or spread hunts to stretch it.`
         }`,
       );
   }

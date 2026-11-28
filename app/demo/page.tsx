@@ -17,6 +17,9 @@ import { formatDate } from "@/lib/seasons";
 import { advisorRanking, countSummary, courseStats, dogStats, fmtPct, fmtRate, rates, totals } from "@/lib/stats";
 import { pressureNote } from "@/lib/weather";
 import { seasonInsights, type Insight, type InsightTopic } from "@/lib/insights";
+import { buildReport, change, formatKpi, formatWindow } from "@/lib/report";
+import { NOTE_CATEGORIES, isNoteCategory, scoutTitle, scoutingPlan } from "@/lib/scouting";
+import type { ExtraPoint } from "@/components/MapView";
 import type { GpsMarkRow } from "@/types/database";
 
 const MapView = dynamic(() => import("@/components/MapView"), {
@@ -24,7 +27,7 @@ const MapView = dynamic(() => import("@/components/MapView"), {
   loading: () => <div className="h-full w-full animate-pulse rounded-2xl bg-sand-dark" />,
 });
 
-type StepId = "field" | "map" | "dogs" | "courses" | "harvest" | "weather" | "seasons" | "insights";
+type StepId = "field" | "map" | "scout" | "dogs" | "courses" | "harvest" | "weather" | "seasons" | "report" | "insights";
 
 interface Step {
   id: StepId;
@@ -58,6 +61,16 @@ const STEPS: Step[] = [
     notice: ["Where coveys cluster, and which parts of a course are empty.", "Switch Satellite, Hybrid and Topo at the top right."],
     topics: [],
     decide: "Plan burns, food plots and feeding around where coveys are (and aren't), and start hunts where birds concentrate.",
+  },
+  {
+    id: "scout",
+    icon: "explore",
+    label: "Scout",
+    title: "Scout new ground and plan it",
+    lead: "Magnolia Bend just added the Cypress Tract: no courses, no dogs yet. Walk it, tap where you find coveys and what the habitat needs, and the app builds a development plan.",
+    notice: ["Covey groups become hotspots: that's where courses go.", "Habitat notes (burns, brush, predators, food) turn into a work list."],
+    topics: [],
+    decide: "Lay out courses through the hotspots, schedule the burns and predator control first, and re-scout next fall to see if the work paid off.",
   },
   {
     id: "dogs",
@@ -104,6 +117,18 @@ const STEPS: Step[] = [
     lead: "Season totals and rates side by side, so you can see whether management is working.",
     notice: ["Coveys per hour is a population index from your own hunts.", "Juveniles per adult reflects how the nesting season went."],
     topics: ["trend", "reproduction"],
+  },
+  {
+    id: "report",
+    icon: "summarize",
+    label: "Reports",
+    title: "Report to the owners",
+    lead: "A weekly, monthly or season report, compared with the same dates last year, with an outlook and recommendations. Save it as a PDF, paste it in an email, or export the year-over-year table for slides.",
+    notice: [
+      "Everything belongs to the property, not the person: when a manager moves on, the next one picks up the full history.",
+      "The year-over-year table is the backbone of a long-term management plan.",
+    ],
+    topics: [],
   },
   {
     id: "insights",
@@ -185,7 +210,7 @@ export default function DemoPage() {
 
       {step === -1 ? (
         <main className="mx-auto max-w-2xl px-4 pb-16 pt-4">
-          <h1 className="text-center font-display text-3xl text-ink">See CoveyTracker in 2 minutes</h1>
+          <h1 className="text-center font-display text-3xl text-ink">See CoveyTracker in 3 minutes</h1>
           <p className="mx-auto mt-2 max-w-md text-center text-bark">
             A guided tour of a sample plantation, from marking a covey in the field to the season decisions it adds up to.
           </p>
@@ -270,6 +295,7 @@ export default function DemoPage() {
                 />
               </>
             )}
+            {cur!.id === "scout" && <ScoutDemo d={d} courseName={courseName} dogName={dogName} />}
             {cur!.id === "dogs" && <DogsDemo d={d} />}
             {cur!.id === "courses" && (
               <div className="grid gap-3 lg:grid-cols-2">
@@ -332,6 +358,8 @@ export default function DemoPage() {
                 })}
               </div>
             )}
+
+            {cur!.id === "report" && <ReportDemo d={d} />}
 
             {(cur!.topics.length > 0 || cur!.decide) && (
               <section className="mt-6">
@@ -683,6 +711,189 @@ function WeatherDemo({ d }: { d: D }) {
         </ol>
         <p className="mt-2 text-xs text-bark">Last hunt: {formatDate(d.hunts[0].date)}</p>
       </section>
+    </div>
+  );
+}
+
+function ScoutDemo({ d, courseName, dogName }: { d: D; courseName: (id: string | null) => string; dogName: (id: string | null) => string }) {
+  const center = useMemo(() => {
+    const b = shapesBounds([d.tract])!;
+    return { lat: (b.south + b.north) / 2, lng: (b.west + b.east) / 2 };
+  }, [d]);
+  const plan = useMemo(
+    () => scoutingPlan({ coveys: d.scoutCoveys, notes: d.scoutNotes, boundary: [d.tract], center, courses: [] }),
+    [d, center],
+  );
+  const notePoints: ExtraPoint[] = d.scoutNotes.map((n) => ({
+    id: n.id,
+    lat: n.lat,
+    lng: n.lng,
+    title: scoutTitle(n),
+    lines: n.notes ? [n.notes] : [],
+    color: NOTE_CATEGORIES[isNoteCategory(n.category) ? n.category : "other"].color,
+  }));
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <div>
+        <MapView
+          className="h-[48vh] min-h-[300px]"
+          marks={d.scoutCoveys}
+          extraPoints={notePoints}
+          courseName={courseName}
+          dogName={dogName}
+          areas={[{ id: "tract", label: "Cypress Tract", color: "#ffffff", shapes: [d.tract], kind: "property" }]}
+          home={center}
+          showLegend={false}
+          fitKey="demo-scout"
+        />
+        <p className="mt-2 text-xs text-bark">Orange: coveys found. Other colors: habitat notes. Tap any dot.</p>
+      </div>
+      <div className="space-y-3">
+        <section className="card space-y-1.5 text-sm">
+          <h3 className="h-section">Where things stand</h3>
+          <p>
+            <strong>{plan.coveys}</strong> coveys located on <strong>{formatAcres(plan.acres ?? 0)}</strong>, one per{" "}
+            <strong>{Math.round(plan.acresPerCovey ?? 0)} acres</strong>
+            <span className="block text-xs text-bark">Intensively managed quail ground often holds about one covey per 10–12 acres by fall.</span>
+          </p>
+          {plan.unscouted != null && (
+            <p>
+              <strong>{Math.round(plan.unscouted * 100)}%</strong> of the tract has nothing recorded within a quarter mile
+            </p>
+          )}
+        </section>
+        <section className="card space-y-2 text-sm">
+          <h3 className="h-section">Covey hotspots</h3>
+          {plan.hotspots.map((h, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-covey text-xs font-bold text-white">{i + 1}</span>
+              <span>
+                <strong>{h.n} coveys</strong> on the {h.where} side{h.birds ? ` · ~${h.birds} birds counted` : ""}
+              </span>
+            </div>
+          ))}
+        </section>
+        <section className="card space-y-2 text-sm">
+          <h3 className="h-section">Habitat work</h3>
+          {plan.habitat
+            .filter((g) => g.category !== "water")
+            .map((g) => (
+              <div key={g.category} className="flex items-start gap-2">
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white" style={{ background: g.info.color }}>
+                  <Icon name={g.info.icon} fill className="text-[14px]" />
+                </span>
+                <span>
+                  <strong>{g.info.label}</strong> · {g.count}
+                  <span className="block text-bark">{g.info.action}</span>
+                </span>
+              </div>
+            ))}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function ReportDemo({ d }: { d: D }) {
+  const r = useMemo(() => {
+    const dates = d.hunts.filter((h) => h.season === d.season).map((h) => h.date).sort();
+    return buildReport({
+      period: "season",
+      // Mid-season, as a manager would send it in January.
+      today: dates[Math.floor(dates.length * 0.7)] ?? `${d.season.slice(0, 4)}-12-31`,
+      hunts: d.hunts,
+      counts: d.counts,
+      marks: [...d.marks, ...d.scoutCoveys, ...d.scoutNotes],
+      courses: d.courses,
+      dogs: d.dogs,
+    });
+  }, [d]);
+  const keys = ["Coveys / hour", "Contacts / hour", "Birds bagged", "Flushed wild"];
+  return (
+    <div className="space-y-3">
+      <div className="card border-forest/30">
+        <div className="flex items-start gap-3">
+          <Image src="/logo-mark.png" alt="" width={44} height={44} className="h-11 w-11 rounded-lg" />
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-forest">Season report · {r.season}</div>
+            <div className="font-display text-xl">{d.property.name}</div>
+            <div className="text-xs text-bark">
+              {formatWindow(r.window)} vs {formatWindow(r.prior)}
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {r.kpis
+            .filter((k) => keys.includes(k.label))
+            .map((k) => {
+              const c = change(k);
+              const good = c == null || k.higherIsBetter == null ? null : (c >= 0) === k.higherIsBetter;
+              return (
+                <div key={k.label} className="rounded-xl border border-line bg-white p-2.5">
+                  <div className="text-xs text-bark">{k.label}</div>
+                  <div className="font-display text-xl">{formatKpi(k.value, k.format)}</div>
+                  <div className="text-[11px] text-bark">
+                    last yr {formatKpi(k.prior, k.format)}
+                    {c != null && Math.abs(c) >= 0.005 && (
+                      <span className={`ml-1 font-semibold ${good == null ? "" : good ? "text-forest" : "text-red-700"}`}>
+                        {c >= 0 ? "▲" : "▼"} {Math.round(Math.abs(c) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      </div>
+      <section className="card space-y-2 border-forest/30 bg-forest-light/40 text-sm">
+        <h3 className="h-section flex items-center gap-2">
+          <Icon name="explore" className="text-forest" /> Outlook and recommendations
+        </h3>
+        <ul className="space-y-1.5">
+          {r.outlook.map((o, i) => (
+            <li key={i} className="flex gap-1.5">
+              <Icon name="arrow_right" className="text-forest" /> <span>{o}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section className="card text-sm">
+        <h3 className="h-section mb-2">Year over year</h3>
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-line text-left text-xs text-bark">
+              <th className="py-1">Season</th>
+              <th className="py-1 text-right">Hunts</th>
+              <th className="py-1 text-right">Coveys/hr</th>
+              <th className="py-1 text-right">Birds</th>
+              <th className="py-1 text-right">Juv/adult</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...r.yoy].reverse().map((y) => (
+              <tr key={y.season} className="border-b border-line/60 last:border-0">
+                <td className="py-1.5 font-medium">{y.season}</td>
+                <td className="py-1.5 text-right tabular-nums">{y.hunts}</td>
+                <td className="py-1.5 text-right tabular-nums">{y.coveysPerHour?.toFixed(1) ?? "—"}</td>
+                <td className="py-1.5 text-right tabular-nums">{y.birds}</td>
+                <td className="py-1.5 text-right tabular-nums">{y.juvPerAdult?.toFixed(2) ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+      <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold text-bark">
+        {[
+          ["picture_as_pdf", "Save as PDF"],
+          ["content_copy", "Copy for email"],
+          ["table_view", "YOY spreadsheet"],
+        ].map(([icon, label]) => (
+          <div key={label} className="rounded-xl border border-dashed border-line bg-white p-2">
+            <Icon name={icon} className="text-forest" />
+            <div>{label}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -51,6 +51,7 @@ test("weekly report compares with the same dates last year", () => {
   // Pond Field: 36 birds, budget 5; bag 6 → 8 harvested: over budget, so rest it
   assert.ok(r.outlook.some((o) => /Rest or go light on Pond Field/.test(o)));
   assert.ok(r.outlook.some((o) => /Hunt next: Big Woods/.test(o)));
+  assert.ok(r.outlook.some((o) => /birds left in the season's harvest budget/.test(o)));
   assert.equal(r.dogs[0].name, "Belle");
   assert.deepEqual(r.population, { coveys: 13, birds: 156, priorCoveys: 8, priorBirds: 96 });
   assert.ok(r.highlights[0].startsWith("Best hunt: Big Woods"));
@@ -63,6 +64,16 @@ test("weekly report compares with the same dates last year", () => {
   assert.equal(csv.length, 3);
   assert.match(csv[0], /^Season,Hunts,Hours/);
   assert.match(csv[2], /^2026-2027,3,9,19,/);
+});
+
+test("harvest pace is weighed against the end of the season", () => {
+  const counts = [count("2026-2027", "c1", 40)]; // 480 birds, budget 72
+  const early = [hunt("2026-11-10", "c1", 6, 3, 4), hunt("2026-11-20", "c1", 6, 3, 4)];
+  const r1 = buildReport({ period: "season", today: "2026-11-24", hunts: early, counts, marks: [], courses, dogs });
+  assert.ok(r1.outlook.some((o) => /lasts about \d+ more weeks, before the season ends/.test(o)), r1.outlook.join(" | "));
+  const late = [hunt("2027-02-01", "c1", 6, 3, 4), hunt("2027-02-15", "c1", 6, 3, 4)];
+  const r2 = buildReport({ period: "season", today: "2027-02-20", hunts: late, counts, marks: [], courses, dogs });
+  assert.ok(r2.outlook.some((o) => /covers the rest of the season/.test(o)), r2.outlook.join(" | "));
 });
 
 test("empty property still builds a report", () => {
