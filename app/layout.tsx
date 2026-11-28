@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   title: "CoveyTracker",
   description: "GPS covey mapping & hunting-dog performance analytics for quail plantations.",
   manifest: "/manifest.json",
-  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
+  icons: { icon: [{ url: "/favicon-48.png", sizes: "48x48" }, { url: "/icon-192.png", sizes: "192x192" }], apple: "/apple-touch-icon.png" },
   appleWebApp: { capable: true, title: "CoveyTracker", statusBarStyle: "default" },
 };
 

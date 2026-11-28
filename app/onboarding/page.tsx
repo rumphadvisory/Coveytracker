@@ -146,7 +146,7 @@ export default function Onboarding() {
   return (
     <main className="mx-auto max-w-md px-4 py-8">
       <div className="mb-6 flex items-center gap-3">
-        <Image src="/logo.png" alt="" width={48} height={48} className="h-12 w-12 object-contain" />
+        <Image src="/logo-mark.png" alt="" width={48} height={48} className="h-12 w-12" />
         <div>
           <h1 className="h-page">Set up your property</h1>
           <p className="text-sm text-bark">Step {steps.indexOf(step) + 1} of 3</p>
