@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { scoutTitle } from "@/lib/scouting";
 import type * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { DEFAULT_CENTER, type Fix } from "@/lib/gps";
@@ -61,6 +62,8 @@ export interface ExtraPoint {
   lng: number;
   title: string;
   lines: string[];
+  /** Dot color (defaults to the covey-count color). */
+  color?: string;
 }
 
 interface Props {
@@ -238,12 +241,14 @@ export default function MapView({
       const color = m.type === "covey" ? MARK_COLORS.covey : MARK_COLORS.contact;
       const lines = [
         ...(m.type === "contact" ? [`Dog: ${dogName(m.dog_id)}`] : []),
-        `Course: ${courseName(m.course_id)}`,
+        ...(m.course_id || m.hunt_id ? [`Course: ${courseName(m.course_id)}`] : []),
+        ...(m.birds ? [`About ${m.birds} birds`] : []),
         new Date(m.timestamp).toLocaleString(),
         ...(m.notes ? [m.notes] : []),
       ];
+      const title = m.type === "contact" ? "Dog contact" : m.category ? scoutTitle(m) : "Covey find";
       Lf.circleMarker([m.lat, m.lng], { radius: 7, color: "#fff", weight: 2, fillColor: color, fillOpacity: 0.95 })
-        .bindPopup(popupNode(m.type === "covey" ? "Covey find" : "Dog contact", lines))
+        .bindPopup(popupNode(title, lines))
         .addTo(marksLayer.current);
       pts.push([m.lat, m.lng]);
     }
@@ -252,7 +257,7 @@ export default function MapView({
         radius: 7,
         color: "#fff",
         weight: 2,
-        fillColor: MARK_COLORS.count,
+        fillColor: p.color ?? MARK_COLORS.count,
         fillOpacity: 0.95,
       })
         .bindPopup(popupNode(p.title, p.lines))
