@@ -15,6 +15,9 @@ const FEATURES: [string, string, string][] = [
   ["polyline", "Courses on the map", "Outline parcels and courses from Google Earth, onX or Garmin files, or draw them. Acres calculated for you."],
   ["partly_cloudy_day", "Weather & scenting", "Conditions filled in automatically, a scenting rating, and which courses are producing the most coveys per hour."],
   ["speed", "Harvest budgets", "Fall covey counts set the population; see each course's harvest against a sustainable budget."],
+  ["explore", "Scout and plan new ground", "No courses or dogs yet? Map coveys and habitat needs as you walk, and get covey hotspots and a development plan."],
+  ["summarize", "Owner-ready reports", "Weekly, monthly and season reports against last year, with an outlook and recommendations. PDF, email or spreadsheet."],
+  ["history", "Records that stay with the land", "Managers and dog men come and go; every hunt, count and plan stays with the property for the next season."],
 ];
 
 export default function Home() {

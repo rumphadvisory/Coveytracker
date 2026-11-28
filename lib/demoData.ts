@@ -37,6 +37,8 @@ const COURSE_SHAPES: [string, BoundaryShape][] = [
   ["Hickory Head", rect("Hickory Head", 0.003, -0.016, 0.02, -0.003)],
 ];
 
+const TRACT = rect("Cypress Tract", 0.026, -0.012, 0.042, 0.012);
+
 export interface DemoData {
   property: PropertyRow;
   courses: CourseRow[];
@@ -45,6 +47,10 @@ export interface DemoData {
   marks: GpsMarkRow[];
   counts: CoveyCountRow[];
   conditions: Conditions;
+  /** A newly added tract with no courses yet, scouted before laying out courses. */
+  tract: BoundaryShape;
+  scoutCoveys: GpsMarkRow[];
+  scoutNotes: GpsMarkRow[];
   season: string;
   lastSeason: string;
 }
@@ -69,7 +75,7 @@ export function buildDemo(): DemoData {
     name: "Magnolia Bend Plantation",
     lat: CENTER.lat,
     lng: CENTER.lng,
-    boundary: [rect("Magnolia Bend", -0.024, -0.019, 0.023, 0.019)],
+    boundary: [rect("Magnolia Bend", -0.024, -0.019, 0.023, 0.019), TRACT],
     owner_id: "demo",
     created_at: "",
   };
@@ -206,5 +212,35 @@ export function buildDemo(): DemoData {
     fetchedAt: new Date().toISOString(),
   };
 
-  return { property, courses, dogs, hunts, marks, counts, conditions, season, lastSeason };
+  // Scouting the new tract: three groups of coveys, a couple of loners, and habitat notes.
+  const tLng = (x: number) => CENTER.lng + x;
+  const tLat = (y: number) => CENTER.lat + y;
+  const scoutDay = `${startYear}-11-0`;
+  const scoutCoveys: GpsMarkRow[] = (
+    [
+      [0.036, 0.008, "heard", 12], [0.0375, 0.0092, "seen", 14], [0.0352, 0.0095, "flushed", null],
+      [0.031, -0.006, "seen", 10], [0.0322, -0.0072, "heard", null], [0.0298, -0.0078, "seen", 9], [0.0315, -0.0088, "heard", 13],
+      [0.04, -0.001, "heard", null], [0.028, 0.004, "seen", 8],
+    ] as [number, number, string, number | null][]
+  ).map(([x, y, category, birds], i) => ({
+    id: `sc${i}`, property_id: P, hunt_id: null, type: "covey", category, birds, lat: tLat(y), lng: tLng(x), accuracy: 5,
+    dog_id: null, course_id: null, season, timestamp: `${scoutDay}${3 + (i % 3)}T0${7 + (i % 3)}:1${i}:00`, notes: i === 0 ? "Whistling at dawn near the old field edge" : null, created_by: "demo",
+  }));
+  const scoutNotes: GpsMarkRow[] = (
+    [
+      ["burn", 0.033, 0.002, "Broomsedge and gallberry too thick; not burned in years"],
+      ["burn", 0.038, -0.005, null],
+      ["hardwood", 0.029, 0.009, "Sweetgum and water oak coming in on the slope"],
+      ["brood", 0.0365, 0.0065, "Weedy fallow field, good bugging ground"],
+      ["predator", 0.034, -0.01, "Coon and possum tracks at the creek crossing"],
+      ["food", 0.0305, -0.0035, "Flat, sunny opening; candidate for a disked strip"],
+      ["cover", 0.032, -0.0095, "Plum thicket next to the south covey group"],
+      ["water", 0.0345, -0.0105, null],
+    ] as [string, number, number, string | null][]
+  ).map(([category, x, y, notes], i) => ({
+    id: `sn${i}`, property_id: P, hunt_id: null, type: "scout", category, birds: null, lat: tLat(y), lng: tLng(x), accuracy: 5,
+    dog_id: null, course_id: null, season, timestamp: `${scoutDay}${3 + (i % 3)}T10:2${i}:00`, notes, created_by: "demo",
+  }));
+
+  return { property, courses, dogs, hunts, marks, counts, conditions, tract: TRACT, scoutCoveys, scoutNotes, season, lastSeason };
 }
