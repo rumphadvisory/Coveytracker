@@ -7,7 +7,7 @@ export default function Landing({ searchParams }: { searchParams: { next?: strin
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">
       <div className="mb-6 text-center">
-        <Image src="/logo.png" alt="CoveyTracker" width={300} height={200} priority className="mx-auto h-auto w-64" />
+        <Image src="/logo-mark.png" alt="CoveyTracker" width={512} height={512} priority className="mx-auto h-44 w-44" />
         <p className="mt-3 text-bark">
           GPS covey mapping, dog performance, and harvest tracking for managed quail plantations.
         </p>
