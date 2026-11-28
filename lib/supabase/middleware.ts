@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 import { SUPABASE_KEY, SUPABASE_URL, supabaseConfigured } from "./env";
 
-const PUBLIC_PATHS = ["/", "/auth"];
+// The marketing site, demo and sign-in are public; everything else is the app.
+const PUBLIC_PATHS = ["/", "/login", "/demo", "/auth", "/robots.txt"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -38,12 +39,14 @@ export async function updateSession(request: NextRequest) {
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = "/login";
+    url.search = "";
     url.searchParams.set("next", path);
     return NextResponse.redirect(url);
   }
 
-  if (user && path === "/") {
+  // Already signed in: skip the sign-in form. (The home page stays viewable; it links to the app.)
+  if (user && path === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/field";
     url.search = "";

@@ -11,6 +11,7 @@ Built with Next.js 14, Supabase, Leaflet + Esri satellite imagery, and Open-Mete
 
 | Module | What it does |
 | --- | --- |
+| **Home page & waitlist** | coveytracker.com shows the overview, a waiting-list form (stored in Supabase `waitlist`, readable only in the dashboard), a public demo at `/demo`, and a small Beta sign-in link to `/login`. Hidden from search engines during the private beta. |
 | **Field Mode** | Pick a course, start a hunt (weather auto-fetched), big one-handed **Mark Covey** / **Dog Contact** buttons. Each tap saves a GPS-stamped mark on the phone and uploads it as soon as there's signal. **End Hunt** opens the logger pre-filled. Survives reloads; keeps the screen awake. |
 | **Offline & install** | Add to the home screen from the browser menu. Once opened with signal, everything you enter works with no signal — marks, hunt logs, covey counts — and uploads in order when you're back in range. Every screen opens offline with the last data the phone saw. **Map → Offline maps** saves USGS Topo and aerial maps around the property for use with no signal. |
 | **Log Hunt** | 5-step wizard: Basics → Dogs → Coveys → Birds → Review, with auto-calculated totals. |

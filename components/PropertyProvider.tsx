@@ -91,7 +91,7 @@ export default function PropertyProvider({ children }: { children: React.ReactNo
       data: { session },
     } = await sb.auth.getSession();
     if (!session) {
-      router.replace("/");
+      router.replace("/login");
       return;
     }
     // Render from the last-known memberships straight away; the network check below can take seconds.
@@ -108,7 +108,7 @@ export default function PropertyProvider({ children }: { children: React.ReactNo
     const { data: auth, error: authErr } = await sb.auth.getUser();
     const offline = authErr != null && isNetworkError(authErr);
     if (!auth.user && !offline) {
-      router.replace("/");
+      router.replace("/login");
       return;
     }
     const me = auth.user ?? session.user;

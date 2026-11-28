@@ -13,7 +13,10 @@ Quail plantation hunting management SaaS. GPS covey mapping, dog performance ana
 ```
 app/
   layout.tsx            # Root layout, fonts (Libre Baskerville / DM Sans), Material Symbols
-  page.tsx              # Landing / magic-link login
+  page.tsx              # Public home page: overview, features, waitlist form, "Beta sign-in"
+  login/page.tsx        # Magic-link / code sign-in (signed-in users are sent to /field)
+  demo/page.tsx         # Public tap-around demo on sample data (lib/demoData.ts); nothing saved
+  robots.ts             # Private beta: disallow all crawlers (root layout also sets noindex)
   auth/callback/        # Magic link + token_hash exchange
   auth/signout/         # POST sign out
   onboarding/page.tsx   # Create property → courses/dogs → invite team
@@ -93,6 +96,10 @@ tests/                  # node:test unit tests for lib/ logic
   are recalculated from the outline on save. Field Mode preselects the course containing the GPS fix.
 - Popups, tooltips and other user text in Leaflet: build DOM with `textContent`, never innerHTML
   (tooltips get an HTMLElement, not a string).
+- Public routes are `/`, `/login`, `/demo`, `/auth/*` (lib/supabase/middleware.ts PUBLIC_PATHS);
+  everything else requires sign-in and redirects to `/login?next=…`.
+- Waitlist (`public.waitlist`): anon may INSERT only; no select policy, so the list is only visible in
+  the Supabase dashboard. Duplicate emails (23505) are treated as "already on the list".
 - Roles: owner (everything + team + danger zone), manager (dogs/courses/settings, delete),
   handler (log hunts, marks, counts; may delete only their own unattached marks).
 
