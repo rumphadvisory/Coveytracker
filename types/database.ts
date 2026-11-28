@@ -7,7 +7,8 @@ export type Role = "owner" | "manager" | "handler";
 export type LngLat = [number, number];
 /** A named area: first ring is the outline, any further rings are holes. */
 export type BoundaryShape = { name: string; rings: LngLat[][] };
-export type MarkType = "covey" | "contact";
+/** covey / contact from hunts and scouting; scout = a habitat or property note from Scout. */
+export type MarkType = "covey" | "contact" | "scout";
 
 // Generated = `generated always` columns, which can't be written. Columns with defaults
 // (id, created_at, …) stay optional on Insert.
@@ -115,6 +116,10 @@ export type GpsMarkRow = {
   timestamp: string;
   notes: string | null;
   created_by: string | null;
+  /** Scout: how a covey was found (seen/heard/flushed) or the note's category (lib/scouting.ts). */
+  category?: string | null;
+  /** Scout: rough covey size, if counted. */
+  birds?: number | null;
 }
 
 export type CoveyCountRow = {

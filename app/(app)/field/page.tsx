@@ -209,6 +209,13 @@ export default function FieldPage() {
           ) : (
             "Ask a manager to add courses."
           )}
+          <span className="mt-3 block">
+            No courses yet? Use{" "}
+            <Link className="font-semibold text-forest underline" href="/scout">
+              Scout
+            </Link>{" "}
+            to map coveys and habitat without a course or dog.
+          </span>
         </Empty>
       );
     }

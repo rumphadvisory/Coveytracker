@@ -7,7 +7,9 @@ import OfflineMaps from "@/components/OfflineMaps";
 import { useProperty } from "@/components/PropertyProvider";
 import { CourseSelect, ErrorNote, OfflineNote, PageHeader, SeasonSelect } from "@/components/ui";
 import { useMarks } from "@/components/useCounts";
+import type { ExtraPoint } from "@/components/MapView";
 import { propertyAreas } from "@/lib/areas";
+import { NOTE_CATEGORIES, isNoteCategory, scoutTitle } from "@/lib/scouting";
 import { ALL } from "@/lib/data";
 import { watchPosition, type Fix } from "@/lib/gps";
 import { currentSeason } from "@/lib/seasons";
@@ -22,7 +24,7 @@ export default function MapPage() {
   const areas = useMemo(() => propertyAreas(property, courses), [property, courses]);
   const [season, setSeason] = useState(currentSeason());
   const [course, setCourse] = useState(ALL);
-  const [show, setShow] = useState({ covey: true, contact: true });
+  const [show, setShow] = useState({ covey: true, contact: true, scout: true });
   const [fix, setFix] = useState<Fix | null>(null);
   const { marks: loaded, error, offline, reload } = useMarks(season);
   const marks = useMemo(() => loaded ?? [], [loaded]);
@@ -49,6 +51,22 @@ export default function MapPage() {
     [marks, show, course],
   );
   const coveys = shown.filter((m) => m.type === "covey").length;
+  const contacts = shown.filter((m) => m.type === "contact").length;
+  // Habitat notes from Scout, drawn in their category colors.
+  const notes = useMemo<ExtraPoint[]>(
+    () =>
+      shown
+        .filter((m) => m.type === "scout")
+        .map((m) => ({
+          id: m.id,
+          lat: m.lat,
+          lng: m.lng,
+          title: scoutTitle(m),
+          lines: [new Date(m.timestamp).toLocaleString(), ...(m.notes ? [m.notes] : [])],
+          color: NOTE_CATEGORIES[isNoteCategory(m.category) ? m.category : "other"].color,
+        })),
+    [shown],
+  );
 
   return (
     <>
@@ -69,12 +87,21 @@ export default function MapPage() {
           className={`chip ${show.contact ? "border-contact bg-contact text-white" : ""}`}
           onClick={() => setShow((s) => ({ ...s, contact: !s.contact }))}
         >
-          <Icon name="pets" className="text-[18px]" /> Contacts · {shown.length - coveys}
+          <Icon name="pets" className="text-[18px]" /> Contacts · {contacts}
         </button>
+        {marks.some((m) => m.type === "scout") && (
+          <button
+            className={`chip ${show.scout ? "border-forest bg-forest text-white" : ""}`}
+            onClick={() => setShow((s) => ({ ...s, scout: !s.scout }))}
+          >
+            <Icon name="explore" className="text-[18px]" /> Scouting notes · {notes.length}
+          </button>
+        )}
       </div>
       <MapView
         className="h-[calc(100dvh-330px)] min-h-[320px] md:h-[calc(100dvh-240px)]"
-        marks={shown}
+        marks={shown.filter((m) => m.type !== "scout")}
+        extraPoints={notes}
         fix={fix}
         courseName={courseName}
         dogName={dogName}

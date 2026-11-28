@@ -38,6 +38,9 @@ export default function HuntsPage() {
       <PageHeader title="Hunts" icon="list_alt">
         <SeasonSelect value={season} onChange={setSeason} allowAll />
         <CourseSelect value={course} onChange={setCourse} allowAll className="w-auto py-2 text-sm" />
+        <Link href="/log" className="btn-primary min-h-0 px-3 py-2 text-sm">
+          <Icon name="add" className="text-[18px]" /> Log hunt
+        </Link>
       </PageHeader>
       <ErrorNote error={error ?? loadError} />
       <OfflineNote show={offline} />

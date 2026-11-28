@@ -23,6 +23,7 @@ app/
   (app)/
     layout.tsx          # PropertyProvider + Nav (auth required)
     field/page.tsx      # Field Mode (GPS marking)
+    scout/page.tsx      # Scout: coveys + habitat notes with no hunt/dog/course; Map; Plan (development plan)
     log/page.tsx        # Hunt logger wizard (?from=field pre-fills from the field session)
     hunts/page.tsx      # Hunt list with filters (each links to /hunt?id=…)
     hunt/page.tsx       # One hunt: map (course, marks, Garmin dog tracks), summary, dogs vs season, timeline, GPX upload
@@ -62,6 +63,7 @@ lib/
   areas.ts              # Property/course outlines → map areas (colors, acre labels)
   coords.ts             # Lat/lng parsing (decimal, N/S/E/W, DMS, pasted pairs)
   tracks.ts             # Garmin/GPX dog tracks: parse, trim to hunt date, thin, stats, match dog, position at time
+  scouting.ts           # Scout categories, covey hotspots, unscouted share, development plan + plain-text copy
   insights.ts           # Season → management decisions (best course, harvest pressure, trend, reproduction, dogs, hunt quality)
   demoData.ts           # Seeded sample plantation for /demo
 public/sw.js            # Service worker: network-first pages, cache-first static assets/fonts, saved USGS tiles
@@ -107,6 +109,9 @@ tests/                  # node:test unit tests for lib/ logic
   everything else requires sign-in and redirects to `/login?next=…`.
 - Waitlist (`public.waitlist`): anon may INSERT only; no select policy, so the list is only visible in
   the Supabase dashboard. Duplicate emails (23505) are treated as "already on the list".
+- Scouting uses `gps_marks`: coveys are `type 'covey'` with `category` seen/heard/flushed and optional
+  `birds`; habitat notes are `type 'scout'` with a `category` from `NOTE_CATEGORIES` (lib/scouting.ts).
+  Both go through the outbox, hunt_id/dog_id null; course_id set only if the fix is inside a course outline.
 - Roles: owner (everything + team + danger zone), manager (dogs/courses/settings, delete),
   handler (log hunts, marks, counts; may delete only their own unattached marks).
 

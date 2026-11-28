@@ -9,7 +9,8 @@ import { useProperty } from "./PropertyProvider";
 
 export const NAV_ITEMS = [
   { href: "/field", label: "Field", icon: "my_location", primary: true },
-  { href: "/log", label: "Log Hunt", icon: "edit_note", primary: true },
+  { href: "/scout", label: "Scout", icon: "explore", primary: true },
+  { href: "/log", label: "Log Hunt", icon: "edit_note" },
   { href: "/hunts", label: "Hunts", icon: "list_alt", primary: true },
   { href: "/map", label: "Map", icon: "map", primary: true },
   { href: "/weather", label: "Weather", icon: "partly_cloudy_day" },

@@ -8,7 +8,8 @@ import { useProperty } from "@/components/PropertyProvider";
 import { ErrorNote, PageHeader } from "@/components/ui";
 import { formatAcres, propertyAreas } from "@/lib/areas";
 import { BOUNDARY_FILE_TYPES, readBoundaryFile } from "@/lib/boundaryFiles";
-import { errorMessage } from "@/lib/data";
+import { ALL, errorMessage } from "@/lib/data";
+import { useMarks } from "@/components/useCounts";
 import { boundsCenter, parsePointList, shapeAcres, shapesBounds, totalAcres, type BoundaryShape } from "@/lib/geo";
 
 const MapView = dynamic(() => import("@/components/MapView"), {
@@ -57,7 +58,10 @@ function friendlySaveError(e: unknown): string {
 }
 
 export default function BoundariesPage() {
-  const { sb, property, courses, canManage, reloadRoster, reloadMemberships } = useProperty();
+  const { sb, property, courses, canManage, reloadRoster, reloadMemberships, courseName, dogName } = useProperty();
+  // Covey locations (scouting and hunts) so courses can be drawn around where the birds are.
+  const { marks: allMarks } = useMarks(ALL);
+  const coveyMarks = useMemo(() => (allMarks ?? []).filter((m) => m.type === "covey"), [allMarks]);
   const [mode, setMode] = useState<Mode>("upload");
   const [items, setItems] = useState<Item[]>([]);
   const [draft, setDraft] = useState<[number, number][]>([]);
@@ -311,9 +315,9 @@ export default function BoundariesPage() {
           ) : undefined
         }
         className={`h-[55vh] min-h-[320px] ${drawing ? "ring-4 ring-covey" : ""}`}
-        marks={[]}
-        courseName={() => ""}
-        dogName={() => ""}
+        marks={coveyMarks}
+        courseName={courseName}
+        dogName={dogName}
         home={home}
         areas={areas}
         draft={drawing ? draft : undefined}
