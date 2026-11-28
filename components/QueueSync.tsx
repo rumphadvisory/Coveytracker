@@ -88,7 +88,7 @@ export default function QueueSync() {
   return (
     <div
       role="status"
-      className={`sticky top-[65px] z-[900] flex flex-wrap items-center justify-center gap-x-2 px-4 py-1.5 text-center text-xs font-semibold md:top-[105px] ${
+      className={`sticky top-[65px] z-[900] flex print:hidden flex-wrap items-center justify-center gap-x-2 px-4 py-1.5 text-center text-xs font-semibold md:top-[105px] ${
         rejected.length ? "bg-red-700 text-white" : online ? "bg-amber-100 text-amber-900" : "bg-ink text-white"
       }`}
     >

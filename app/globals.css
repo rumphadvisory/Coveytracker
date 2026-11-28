@@ -90,3 +90,10 @@ body {
 .leaflet-tooltip.ct-area-label::before {
   display: none;
 }
+
+/* Reports print / save as PDF cleanly: white page, no app chrome, cards don't split. */
+@media print {
+  @page { margin: 12mm; }
+  body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .card { box-shadow: none !important; }
+}

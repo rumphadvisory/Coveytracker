@@ -34,6 +34,7 @@ app/
     counts/page.tsx     # Fall covey count surveys
     harvest/page.tsx    # Harvest budget calculator
     season/page.tsx     # Season dashboard
+    report/page.tsx     # Weekly / monthly / season report vs same dates last year: PDF (print), copy text, YOY CSV
     boundaries/page.tsx # Property parcels + course outlines: upload KML/KMZ/GPX/GeoJSON, paste points, draw
     manage/page.tsx     # Dogs, courses, property, team, danger zone
 components/
@@ -64,6 +65,7 @@ lib/
   coords.ts             # Lat/lng parsing (decimal, N/S/E/W, DMS, pasted pairs)
   tracks.ts             # Garmin/GPX dog tracks: parse, trim to hunt date, thin, stats, match dog, position at time
   scouting.ts           # Scout categories, covey hotspots, unscouted share, development plan + plain-text copy
+  report.ts             # Report windows, KPIs vs last year, courses/harvest/dogs/population, outlook, YOY + text/CSV
   insights.ts           # Season → management decisions (best course, harvest pressure, trend, reproduction, dogs, hunt quality)
   demoData.ts           # Seeded sample plantation for /demo
 public/sw.js            # Service worker: network-first pages, cache-first static assets/fonts, saved USGS tiles
@@ -114,6 +116,9 @@ tests/                  # node:test unit tests for lib/ logic
   Both go through the outbox, hunt_id/dog_id null; course_id set only if the fix is inside a course outline.
 - Roles: owner (everything + team + danger zone), manager (dogs/courses/settings, delete),
   handler (log hunts, marks, counts; may delete only their own unattached marks).
+- Records belong to the property, not the person. `transfer_ownership(p_property, p_new_owner)` RPC makes
+  another member the owner (caller becomes manager, properties.owner_id updated); non-owners can leave.
+- Print: app chrome (Nav header/bottom bar, QueueSync strip) is `print:hidden`; reports print cleanly to PDF.
 
 ## Commands
 - `npm run dev` — local dev server

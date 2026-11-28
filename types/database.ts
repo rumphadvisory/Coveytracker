@@ -204,6 +204,7 @@ export type Database = {
       accept_pending_invites: { Args: Record<PropertyKey, never>; Returns: number };
       property_member_list: { Args: { p_property: string }; Returns: MemberListRow[] };
       clear_hunt_data: { Args: { p_property: string }; Returns: undefined };
+      transfer_ownership: { Args: { p_property: string; p_new_owner: string }; Returns: undefined };
       member_role: { Args: { p_property: string }; Returns: string | null };
     };
     Enums: { [_ in never]: never };

@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
+import Icon from "@/components/Icon";
 import StatBox, { RatePill } from "@/components/StatBox";
 import { useHunts } from "@/components/useHunts";
 import { Empty, ErrorNote, Loading, PageHeader } from "@/components/ui";
@@ -18,7 +20,11 @@ export default function SeasonPage() {
 
   return (
     <>
-      <PageHeader title="Season Dashboard" icon="insights" />
+      <PageHeader title="Season Dashboard" icon="insights">
+        <Link href="/report" className="btn-primary min-h-0 px-3 py-2 text-sm">
+          <Icon name="summarize" className="text-[18px]" /> Reports
+        </Link>
+      </PageHeader>
       <ErrorNote error={error} />
       {hunts === null ? (
         <Loading />
