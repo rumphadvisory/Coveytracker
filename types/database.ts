@@ -134,6 +134,20 @@ export type CoveyCountRow = {
   created_at: string;
 }
 
+export type WaitlistRole = "owner" | "manager" | "dog_man" | "other";
+
+export type WaitlistRow = {
+  id: string;
+  name: string;
+  email: string;
+  property_name: string | null;
+  state: string | null;
+  acres: string | null;
+  role: WaitlistRole | null;
+  heard_from: string | null;
+  created_at: string;
+}
+
 export type MemberListRow = {
   id: string;
   user_id: string;
@@ -158,6 +172,7 @@ export type Database = {
       dog_runs: Table<DogRunRow, "hunt_id" | "dog_id">;
       gps_marks: Table<GpsMarkRow, "property_id" | "type" | "lat" | "lng" | "season">;
       covey_counts: Table<CoveyCountRow, "property_id" | "season", "estimated_birds">;
+      waitlist: Table<WaitlistRow, "name" | "email">;
     };
     Views: { [_ in never]: never };
     Functions: {
