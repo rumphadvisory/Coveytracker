@@ -20,6 +20,7 @@ export const NAV_ITEMS = [
   { href: "/harvest", label: "Harvest", icon: "speed" },
   { href: "/boundaries", label: "Boundaries", icon: "polyline" },
   { href: "/season", label: "Seasons", icon: "insights" },
+  { href: "/report", label: "Reports", icon: "summarize" },
   { href: "/manage", label: "Manage", icon: "settings" },
 ] as const;
 
@@ -38,7 +39,7 @@ export default function Nav() {
 
   return (
     <>
-      <header className="sticky top-0 z-[1000] border-b border-line bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-[1000] border-b print:hidden border-line bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2">
           <Link href="/field" className="flex shrink-0 items-center gap-2">
             <Image src="/logo-mark.png" alt="CoveyTracker" width={48} height={48} className="h-12 w-12" />
@@ -81,7 +82,7 @@ export default function Nav() {
 
       {/* Mobile bottom bar */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-[1000] border-t border-line bg-white md:hidden"
+        className="fixed inset-x-0 bottom-0 z-[1000] border-t border-line bg-white md:hidden print:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="grid grid-cols-5">

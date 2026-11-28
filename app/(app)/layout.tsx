@@ -9,7 +9,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Nav />
       <QueueSync />
       <ServiceWorker />
-      <main className="mx-auto max-w-6xl px-4 pb-28 pt-4 md:pb-10">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 pb-28 pt-4 md:pb-10 print:max-w-none print:p-0">{children}</main>
     </PropertyProvider>
   );
 }

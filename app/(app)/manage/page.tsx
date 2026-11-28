@@ -98,6 +98,33 @@ export default function ManagePage() {
     loadTeam();
   }
 
+  async function transferOwnership(m: MemberListRow) {
+    if (
+      !confirm(
+        `Make ${m.email} the owner of ${property.name}?\n\nThey get full control, including the team and danger zone. You stay on as a manager, and can leave or be removed later. All records stay with the property.`,
+      )
+    )
+      return;
+    const { error } = await sb.rpc("transfer_ownership", { p_property: property.id, p_new_owner: m.user_id });
+    if (error) {
+      return setError(
+        /function|schema cache/i.test(error.message)
+          ? "Ownership transfer needs a one-time database update (supabase/migrations/20261201000000_transfer_ownership.sql). Ask for the SQL link."
+          : error.message,
+      );
+    }
+    setNotice(`${m.email} is now the owner. You're a manager.`);
+    reloadMemberships();
+    loadTeam();
+  }
+
+  async function leaveProperty() {
+    if (!confirm(`Leave ${property.name}? Your records stay with the property; you'll lose access until you're invited back.`)) return;
+    const { error } = await sb.from("property_members").delete().eq("property_id", property.id).eq("user_id", user.id);
+    if (error) return setError(error.message);
+    window.location.href = "/field";
+  }
+
   async function removeMember(m: MemberListRow) {
     if (!confirm(`Remove ${m.email} from ${property.name}?`)) return;
     const { error } = await sb.from("property_members").delete().eq("id", m.id);
@@ -255,6 +282,14 @@ export default function ManagePage() {
                       <option value="manager">manager</option>
                       <option value="handler">handler</option>
                     </select>
+                    <button
+                      className="p-1 text-bark"
+                      aria-label={`Make ${m.email} the owner`}
+                      title="Make owner"
+                      onClick={() => transferOwnership(m)}
+                    >
+                      <Icon name="key" className="text-[20px]" />
+                    </button>
                     <button className="p-1 text-bark" aria-label={`Remove ${m.email}`} onClick={() => removeMember(m)}>
                       <Icon name="person_remove" className="text-[20px]" />
                     </button>
@@ -283,6 +318,19 @@ export default function ManagePage() {
               </li>
             ))}
           </ul>
+          <div className="rounded-xl bg-sand p-3 text-xs text-bark">
+            <strong className="text-ink">Records stay with the property.</strong> When a manager or dog man moves on,
+            remove them and invite their replacement: every hunt, mark, count and plan stays here.
+            {isOwner ? (
+              <>
+                {" "}
+                To hand the whole property to someone (for example, the plantation owner), invite them, then tap{" "}
+                <Icon name="key" className="align-middle text-[14px]" /> next to their name.
+              </>
+            ) : (
+              " Their own login goes with them, ready to use at their next property."
+            )}
+          </div>
           {isOwner && (
             <form onSubmit={sendInvite} className="space-y-2">
               <input
@@ -340,6 +388,13 @@ export default function ManagePage() {
               <Icon name="logout" /> Sign out
             </button>
           </form>
+          {isOwner ? (
+            <p className="text-xs text-bark">To leave {property.name}, first make someone else the owner in Team.</p>
+          ) : (
+            <button className="btn-ghost w-full text-sm text-red-800" onClick={leaveProperty}>
+              <Icon name="exit_to_app" /> Leave {property.name}
+            </button>
+          )}
         </Section>
 
         {isOwner && (
