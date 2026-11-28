@@ -15,7 +15,7 @@ Built with Next.js 14, Supabase, Leaflet + Esri satellite imagery, and Open-Mete
 | **Field Mode** | Pick a course, start a hunt (weather auto-fetched), big one-handed **Mark Covey** / **Dog Contact** buttons. Each tap saves a GPS-stamped mark on the phone and uploads it as soon as there's signal. **End Hunt** opens the logger pre-filled. Survives reloads; keeps the screen awake. |
 | **Offline & install** | Add to the home screen from the browser menu. Once opened with signal, everything you enter works with no signal — marks, hunt logs, covey counts — and uploads in order when you're back in range. Every screen opens offline with the last data the phone saw. **Map → Offline maps** saves USGS Topo and aerial maps around the property for use with no signal. |
 | **Log Hunt** | 5-step wizard: Basics → Dogs → Coveys → Birds → Review, with auto-calculated totals. |
-| **Hunts** | Filter by season/course, expand for full detail and per-dog chips, delete (managers). |
+| **Hunts** | Filter by season/course, expand for full detail and per-dog chips, delete (managers). Open any hunt for its own page: map with the course, every mark and **Garmin dog tracks** (upload the GPX from an Astro/Alpha or BaseCamp), the summary, each dog's contacts/hr vs season plus miles, speed and time moving, and a timeline showing the nearest dog at each covey find. |
 | **Dogs** | Ranked by contacts, bar chart, contacts/hr, hours, hunts. |
 | **Courses** | Per-course aggregates and shot/pointed vs seen, % juvenile. |
 | **Weather** | Current conditions, scenting rating, barometric note, Hunt Advisor ranking courses by coveys/hr. |

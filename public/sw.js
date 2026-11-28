@@ -6,7 +6,7 @@
  * - Supabase, Open-Meteo, Esri tiles and anything else cross-origin: untouched.
  * Pages are static shells (data loads client-side), so cached HTML holds no user data.
  */
-const VERSION = "v4";
+const VERSION = "v5";
 const PAGES = `ct-pages-${VERSION}`;
 const ASSETS = `ct-assets-${VERSION}`;
 const TILES = "ct-tiles-v1"; // keep in sync with lib/tiles.ts; not versioned so saved maps survive updates

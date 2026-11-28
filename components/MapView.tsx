@@ -80,10 +80,20 @@ interface Props {
   draft?: [number, number][];
   /** Tap on the map (used for drawing outlines). */
   onMapClick?: (lat: number, lng: number) => void;
+  /** Dog GPS tracks (e.g. from Garmin collars), drawn as colored lines under the marks. */
+  tracks?: MapTrack[];
   /** Covey / contact legend (not useful on the boundaries screen). */
   showLegend?: boolean;
   /** Extra controls drawn over the map (bottom-left). */
   overlay?: React.ReactNode;
+}
+
+export interface MapTrack {
+  id: string;
+  label: string;
+  color: string;
+  /** [lat, lng] */
+  points: [number, number][];
 }
 
 export interface MapArea {
@@ -129,6 +139,7 @@ export default function MapView({
   areas = [],
   draft,
   onMapClick,
+  tracks = [],
   showLegend = true,
   overlay,
 }: Props) {
@@ -161,8 +172,8 @@ export default function MapView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const latest = useRef({ marks, fix, extraPoints, courseName, dogName, fitKey, home, areas, draft, onMapClick });
-  latest.current = { marks, fix, extraPoints, courseName, dogName, fitKey, home, areas, draft, onMapClick };
+  const latest = useRef({ marks, fix, extraPoints, courseName, dogName, fitKey, home, areas, draft, onMapClick, tracks });
+  latest.current = { marks, fix, extraPoints, courseName, dogName, fitKey, home, areas, draft, onMapClick, tracks };
   const pointsRef = useRef<L.LatLngExpression[]>([]);
   const areaPointsRef = useRef<L.LatLngExpression[]>([]);
   const areasLayer = useRef<L.LayerGroup | null>(null);
@@ -172,7 +183,7 @@ export default function MapView({
     const Lf = leafletRef.current;
     const map = mapRef.current;
     if (!Lf || !map || !marksLayer.current) return;
-    const { marks, fix, extraPoints, courseName, dogName, fitKey, home, areas, draft } = latest.current;
+    const { marks, fix, extraPoints, courseName, dogName, fitKey, home, areas, draft, tracks } = latest.current;
 
     // Outlined areas, under the marks.
     const areaPts: L.LatLngExpression[] = [];
@@ -197,6 +208,17 @@ export default function MapView({
               className: "ct-area-label",
             });
         }
+      }
+      // Dog tracks: a dark casing under a bright line so they read on satellite and topo alike.
+      for (const t of tracks) {
+        if (t.points.length < 2) continue;
+        Lf.polyline(t.points, { color: "#1f1d1a", weight: 6, opacity: 0.55, interactive: false }).addTo(areasLayer.current);
+        Lf.polyline(t.points, { color: t.color, weight: 3, opacity: 0.95, interactive: false }).addTo(areasLayer.current);
+        Lf.circleMarker(t.points[0], { radius: 4, color: "#fff", weight: 2, fillColor: t.color, fillOpacity: 1, interactive: false }).addTo(areasLayer.current);
+        Lf.circleMarker(t.points[t.points.length - 1], { radius: 5, color: "#1f1d1a", weight: 2, fillColor: t.color, fillOpacity: 1 })
+          .bindTooltip(labelNode(t.label), { permanent: true, direction: "right", className: "ct-area-label" })
+          .addTo(areasLayer.current);
+        t.points.forEach((p) => areaPts.push(p));
       }
       if (draft?.length) {
         Lf.polyline(draft.length > 2 ? [...draft, draft[0]] : draft, { color: "#e76624", weight: 3, dashArray: "6 6" }).addTo(
@@ -354,7 +376,7 @@ export default function MapView({
   useEffect(() => {
     if (readyRef.current) draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [marks, fix, extraPoints, fitKey, courseName, dogName, home, areas, draft]);
+  }, [marks, fix, extraPoints, fitKey, courseName, dogName, home, areas, draft, tracks]);
 
   return (
     <div className={`relative overflow-hidden rounded-2xl border border-line ${className}`}>

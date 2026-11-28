@@ -92,6 +92,9 @@ export default function HuntsPage() {
                 </button>
                 {isOpen && (
                   <div className="border-t border-line p-4">
+                    <Link href={`/hunt?id=${h.id}`} className="btn-primary mb-4 w-full">
+                      <Icon name="map" /> Open hunt: map, dog tracks &amp; timeline
+                    </Link>
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
                       {(
                         [
